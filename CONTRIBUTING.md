@@ -1,6 +1,6 @@
 # Contributing
 
-Boop is a small personal-agent template. The codebase stays tight because that's the whole point — it should be small enough to read cover-to-cover in an afternoon and fork without fear.
+Lumi Assistant is a small personal-agent template. The codebase stays tight because that's the whole point — it should be small enough to read cover-to-cover in an afternoon and fork without fear.
 
 ## What lands in source
 

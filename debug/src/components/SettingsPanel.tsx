@@ -281,11 +281,11 @@ function TextBoopRow({
 
   return (
     <SettingShell
-      label="Text Boop"
+      label="Text Lumi Assistant"
       description={
         demoModeEnabled
           ? "Demo mode is hiding the real Sendblue number and showing a placeholder instead."
-          : "Text or iMessage this Sendblue number to talk to Boop. Message it from a different phone; it is the number people text TO, not your personal cell."
+          : "Text or iMessage this Sendblue number to talk to Lumi Assistant. Message it from a different phone; it is the number people text TO, not your personal cell."
       }
       debugLine={debugLine}
       isDark={isDark}

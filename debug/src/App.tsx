@@ -12,6 +12,8 @@ import {
   Settings01Icon,
   Moon02Icon,
   Sun03Icon,
+  Folder01Icon,
+  CheckmarkBadge01Icon,
 } from "@hugeicons/core-free-icons";
 import { api } from "../../convex/_generated/api.js";
 import { useSocket } from "./lib/useSocket.js";
@@ -24,11 +26,15 @@ import { ConnectionsPanel } from "./components/ConnectionsPanel.js";
 import { ConsolidationPanel } from "./components/ConsolidationPanel.js";
 import { SettingsPanel } from "./components/SettingsPanel.js";
 import { ChangelogDrawer } from "./components/ChangelogDrawer.js";
+import { ProjectsPanel } from "./components/ProjectsPanel.js";
+import { ReviewPanel } from "./components/ReviewPanel.js";
+import { LumiMark } from "./components/LumiMark.js";
 import { RuntimeProviderLogo, type RuntimeProvider } from "./lib/branding.js";
-import boopGif from "../../assets/boop.gif";
 
 type View =
   | "dashboard"
+  | "projects"
+  | "review"
   | "agents"
   | "automations"
   | "memory"
@@ -86,6 +92,8 @@ const DEMO_PHONE_NUMBER = "+11111111111";
 
 const NAV_ICONS: Record<View, any> = {
   dashboard: DashboardSquare01Icon,
+  projects: Folder01Icon,
+  review: CheckmarkBadge01Icon,
   agents: MachineRobotIcon,
   automations: WorkflowCircle03Icon,
   memory: AiBrain02Icon,
@@ -96,7 +104,9 @@ const NAV_ICONS: Record<View, any> = {
 };
 
 const NAV: { id: View; label: string }[] = [
-  { id: "dashboard", label: "Dashboard" },
+  { id: "dashboard", label: "Home" },
+  { id: "projects", label: "Projects" },
+  { id: "review", label: "Review" },
   { id: "agents", label: "Agents" },
   { id: "automations", label: "Automations" },
   { id: "memory", label: "Memory" },
@@ -108,7 +118,11 @@ const NAV: { id: View; label: string }[] = [
 
 function getStoredTheme(): Theme {
   try {
-    return (localStorage.getItem("boop-debug-theme") as Theme) || "dark";
+    return (
+      (localStorage.getItem("lumi-assistant-theme") as Theme) ||
+      (localStorage.getItem("boop-debug-theme") as Theme) ||
+      "dark"
+    );
   } catch {
     return "dark";
   }
@@ -148,9 +162,9 @@ export function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     document.documentElement.classList.toggle("light", theme === "light");
-    document.body.style.background = theme === "dark" ? "#101012" : "#f7f7f5";
-    document.body.style.color = theme === "dark" ? "#f4f4f5" : "#18181b";
-    localStorage.setItem("boop-debug-theme", theme);
+    document.body.style.background = theme === "dark" ? "#101012" : "#FBFAF6";
+    document.body.style.color = theme === "dark" ? "#f4f4f5" : "#1A1A1A";
+    localStorage.setItem("lumi-assistant-theme", theme);
   }, [theme]);
 
   useEffect(() => {
@@ -207,7 +221,7 @@ export function App() {
   }
 
   const isDark = theme === "dark";
-  const currentView = NAV.find((item) => item.id === view)?.label ?? "Dashboard";
+  const currentView = NAV.find((item) => item.id === view)?.label ?? "Home";
   const demoModeEnabled = demoStatus?.enabled ?? false;
   const storedProvider: RuntimeProvider | null =
     storedRuntime === "claude" || storedRuntime === "codex" ? storedRuntime : null;
@@ -236,12 +250,12 @@ export function App() {
   return (
     <div
       className={`h-full flex ${
-        isDark ? "bg-[#101012] text-zinc-100" : "bg-[#f7f7f5] text-zinc-900"
+        isDark ? "bg-[#101012] text-zinc-100" : "bg-[#FBFAF6] text-zinc-900"
       }`}
     >
       <nav
         className={`desktop-drag-region w-[244px] shrink-0 px-3 pb-3 ${inDesktopShell ? "pt-12" : "pt-3"} flex flex-col ${
-          isDark ? "bg-[#101012]" : "bg-[#f7f7f5]"
+          isDark ? "bg-[#101012]" : "bg-[#FBFAF6]"
         }`}
       >
         <ConnectionHeader
@@ -348,7 +362,7 @@ export function App() {
         >
           <div>
             <div className={`text-[11px] ${isDark ? "text-zinc-500" : "text-zinc-500"}`}>
-              Boop Debug
+              Lumi workspace
             </div>
             <h2 className={`text-sm font-medium ${isDark ? "text-zinc-100" : "text-zinc-950"}`}>
               {currentView}
@@ -384,6 +398,8 @@ export function App() {
         <main className="flex-1 min-h-0 min-w-0 overflow-hidden">
           <div key={view} className="h-full overflow-auto debug-scroll p-5 view-shell">
             {view === "dashboard" && <DashboardPanel isDark={isDark} />}
+            {view === "projects" && <ProjectsPanel isDark={isDark} />}
+            {view === "review" && <ReviewPanel isDark={isDark} />}
             {view === "agents" && <AgentsPanel isDark={isDark} />}
             {view === "automations" && <AutomationsPanel isDark={isDark} />}
             {view === "memory" && (
@@ -451,7 +467,7 @@ function ConnectionHeader({
   const open = hovered || expanded;
   const services = desktopStatus
     ? [
-        { label: "Boop agent", value: desktopStatus.state },
+        { label: "Lumi Assistant", value: desktopStatus.state },
         { label: "Server", value: desktopStatus.server },
         { label: "Convex", value: desktopStatus.convex },
         { label: "Dashboard", value: desktopStatus.dashboard },
@@ -488,7 +504,7 @@ function ConnectionHeader({
     : healthy
       ? "Connection healthy"
       : connected
-        ? "Boop starting"
+        ? "Lumi starting"
         : "Disconnected";
 
   return (
@@ -505,10 +521,10 @@ function ConnectionHeader({
           isDark ? "hover:bg-white/5" : "hover:bg-white/70"
         }`}
       >
-        <img src={boopGif} alt="Boop" className="h-8 w-8 rounded-2xl object-cover" />
+        <LumiMark size={32} />
         <div className="min-w-0">
           <h1 className={`truncate text-sm font-semibold ${isDark ? "text-zinc-100" : "text-zinc-950"}`}>
-            Boop
+            Lumi Assistant
           </h1>
           <div
             className={`flex items-center gap-1.5 truncate text-xs ${
@@ -572,7 +588,7 @@ function ConnectionHeader({
           {expanded && desktopStatus && (
             <div className={`mt-3 space-y-2 border-t pt-3 ${isDark ? "border-white/10" : "border-zinc-200"}`}>
               <ConnectionDetail label="Convex URL" value={desktopStatus.convexUrl} isDark={isDark} />
-              <ConnectionDetail label="Text Boop" value={desktopStatus.phoneNumber} isDark={isDark} />
+              <ConnectionDetail label="Text Lumi" value={desktopStatus.phoneNumber} isDark={isDark} />
               <ConnectionDetail label="Public URL" value={desktopStatus.publicUrl} isDark={isDark} />
               <ConnectionDetail
                 label="Expected webhook"

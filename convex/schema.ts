@@ -1,7 +1,168 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+const projectStatus = v.union(
+  v.literal("planned"),
+  v.literal("active"),
+  v.literal("paused"),
+  v.literal("completed"),
+  v.literal("archived"),
+);
+
+const priority = v.union(
+  v.literal("low"),
+  v.literal("medium"),
+  v.literal("high"),
+  v.literal("critical"),
+);
+
+const workItemKind = v.union(
+  v.literal("decision"),
+  v.literal("commitment"),
+  v.literal("task"),
+  v.literal("idea"),
+  v.literal("waiting_on"),
+  v.literal("blocker"),
+  v.literal("risk"),
+  v.literal("question"),
+  v.literal("opportunity"),
+);
+
+const workItemStatus = v.union(
+  v.literal("proposed"),
+  v.literal("open"),
+  v.literal("in_progress"),
+  v.literal("completed"),
+  v.literal("resolved"),
+  v.literal("rejected"),
+  v.literal("superseded"),
+);
+
 export default defineSchema({
+  // Lumi's structured business state. These records are deliberately
+  // separate from conversational memory: they are canonical, reviewable,
+  // and can be linked back to original evidence.
+  projects: defineTable({
+    name: v.string(),
+    summary: v.optional(v.string()),
+    status: projectStatus,
+    priority,
+    targetAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status_and_updated_at", ["status", "updatedAt"])
+    .index("by_updated_at", ["updatedAt"])
+    .searchIndex("search_name", { searchField: "name", filterFields: ["status"] }),
+
+  workItems: defineTable({
+    projectId: v.optional(v.id("projects")),
+    kind: workItemKind,
+    title: v.string(),
+    detail: v.optional(v.string()),
+    status: workItemStatus,
+    priority,
+    ownerName: v.optional(v.string()),
+    waitingOnName: v.optional(v.string()),
+    dueAt: v.optional(v.number()),
+    confidence: v.optional(v.number()),
+    needsReview: v.boolean(),
+    sourceCount: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_project_id_and_status", ["projectId", "status"])
+    .index("by_kind_and_status", ["kind", "status"])
+    .index("by_needs_review_and_updated_at", ["needsReview", "updatedAt"])
+    .index("by_updated_at", ["updatedAt"])
+    .searchIndex("search_title", {
+      searchField: "title",
+      filterFields: ["kind", "status"],
+    }),
+
+  sources: defineTable({
+    sourceType: v.union(
+      v.literal("manual"),
+      v.literal("plaud"),
+      v.literal("gmail"),
+      v.literal("drive"),
+      v.literal("github"),
+      v.literal("conversation"),
+    ),
+    externalId: v.optional(v.string()),
+    title: v.string(),
+    summary: v.optional(v.string()),
+    uri: v.optional(v.string()),
+    contentHash: v.string(),
+    sensitivity: v.union(
+      v.literal("internal"),
+      v.literal("confidential"),
+      v.literal("restricted"),
+    ),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("indexed"),
+      v.literal("failed"),
+    ),
+    occurredAt: v.optional(v.number()),
+    importedAt: v.number(),
+    metadata: v.optional(v.string()),
+  })
+    .index("by_source_type_and_external_id", ["sourceType", "externalId"])
+    .index("by_status_and_imported_at", ["status", "importedAt"])
+    .index("by_imported_at", ["importedAt"]),
+
+  sourceChunks: defineTable({
+    sourceId: v.id("sources"),
+    sequence: v.number(),
+    content: v.string(),
+    locator: v.optional(v.string()),
+    embedding: v.optional(v.array(v.float64())),
+    createdAt: v.number(),
+  })
+    .index("by_source_id_and_sequence", ["sourceId", "sequence"])
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1024,
+      filterFields: ["sourceId"],
+    }),
+
+  evidenceLinks: defineTable({
+    targetType: v.union(v.literal("project"), v.literal("work_item")),
+    targetId: v.string(),
+    sourceId: v.id("sources"),
+    chunkId: v.optional(v.id("sourceChunks")),
+    quote: v.optional(v.string()),
+    locator: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_target_type_and_target_id", ["targetType", "targetId"])
+    .index("by_source_id", ["sourceId"]),
+
+  proposals: defineTable({
+    proposalType: v.union(
+      v.literal("create_project"),
+      v.literal("update_project"),
+      v.literal("create_work_item"),
+      v.literal("update_work_item"),
+    ),
+    title: v.string(),
+    summary: v.string(),
+    payload: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("rejected"),
+    ),
+    sourceId: v.optional(v.id("sources")),
+    targetId: v.optional(v.string()),
+    confidence: v.optional(v.number()),
+    createdAt: v.number(),
+    decidedAt: v.optional(v.number()),
+  })
+    .index("by_status_and_created_at", ["status", "createdAt"])
+    .index("by_source_id", ["sourceId"]),
+
   messages: defineTable({
     conversationId: v.string(),
     role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),

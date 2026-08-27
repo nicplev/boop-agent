@@ -1,8 +1,8 @@
 {
-  "name": "boop-agent",
+  "name": "lumi-assistant",
   "version": "0.2.0",
   "private": true,
-  "description": "Text-an-agent starter: iMessage your Claude or Codex-backed agent, with sub-agents, memory, automations, and integrations.",
+  "description": "Lumi's private business and development assistant, with structured project state, source-linked knowledge, automations, and integrations.",
   "license": "MIT",
   "main": "electron/main.cjs",
   "type": "module",
@@ -77,8 +77,8 @@
     "vitest": "^4.1.10"
   },
   "build": {
-    "appId": "com.raroque.boop",
-    "productName": "Boop",
+    "appId": "com.lumi.assistant",
+    "productName": "Lumi Assistant",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "asar": false,
     "files": [

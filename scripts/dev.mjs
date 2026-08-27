@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// One command to run Boop locally: server + convex + debug dashboard + ngrok.
+// One command to run Lumi Assistant locally: server + convex + debug dashboard + ngrok.
 // Prefixes each child's output so you can tell who's saying what.
 
 import { spawn } from "node:child_process";
@@ -221,7 +221,7 @@ function showBanner(url, stable, webhookSyncState) {
 
   console.log(`
 ${C.banner}${line}
-  Boop is ready — ${headline}
+  Lumi Assistant is ready — ${headline}
 
   🐶 Debug dashboard (click me):   ${dashboardUrl}
   🌐 Public URL:                   ${url}
@@ -247,7 +247,7 @@ ${C.dim}  Install:   brew install ngrok         (macOS)
   }
 }
 
-console.log(`\nBoop dev starting on port ${port}. Ctrl-C to stop everything.\n`);
+console.log(`\nLumi Assistant dev starting on port ${port}. Ctrl-C to stop everything.\n`);
 
 // Background "new-version available?" check. Runs concurrently with the
 // child services; output is prefixed with `upstream │ ` by run() so it
@@ -380,7 +380,7 @@ Promise.all([
       if (ngrokUrl) {
         // Synchronize both the URL and signing secret. This is required even
         // for a reserved domain because older dashboard-created webhooks may
-        // not have Boop's signing secret yet.
+        // not have Lumi Assistant's signing secret yet.
         const webhookSyncState = await registerSendblueWebhookOnce(
           (await readNgrokUrl()) ?? ngrokUrl,
         );
@@ -401,7 +401,7 @@ Promise.all([
       const line = "═".repeat(68);
       console.log(`
 ${C.banner}${line}
-  Boop is running locally.
+  Lumi Assistant is running locally.
 
   🐶 Debug dashboard:   ${dashboardUrl}
 

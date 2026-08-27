@@ -7,7 +7,7 @@ import "./styles.css";
 
 const storedTheme = (() => {
   try {
-    return localStorage.getItem("boop-debug-theme");
+    return localStorage.getItem("lumi-assistant-theme") ?? localStorage.getItem("boop-debug-theme");
   } catch {
     return null;
   }

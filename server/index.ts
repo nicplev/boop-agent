@@ -72,7 +72,7 @@ async function main() {
   app.use(express.json({ limit: "2mb" }));
 
   app.get("/health", (_req, res) => {
-    res.json({ ok: true, service: "boop-agent" });
+    res.json({ ok: true, service: "lumi-assistant" });
   });
 
   app.get("/runtime-config", async (_req, res) => {
@@ -200,7 +200,7 @@ async function main() {
 
   const port = Number(process.env.PORT ?? 3456);
   server.listen(port, () => {
-    console.log(`boop-agent server listening on :${port}`);
+    console.log(`lumi-assistant server listening on :${port}`);
     console.log(`  health      GET  http://localhost:${port}/health`);
     console.log(`  chat        POST http://localhost:${port}/chat`);
     console.log(`  sendblue    POST http://localhost:${port}/sendblue/webhook`);
