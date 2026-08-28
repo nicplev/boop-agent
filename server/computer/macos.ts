@@ -242,6 +242,22 @@ export async function captureMacScreenshot(): Promise<MacScreenshot> {
   }
 }
 
+export async function probeMacScreenCapturePermission(): Promise<void> {
+  if (process.platform !== "darwin") throw new Error("Mac computer control requires macOS.");
+  // Permission testing is local-only and never returns image bytes to an
+  // agent. Keep the stricter protected-app check in captureMacScreenshot(),
+  // where a real screenshot can leave the Mac.
+  const directory = await mkdtemp(join(tmpdir(), "lumi-computer-probe-"));
+  const path = join(directory, "screen.png");
+  try {
+    await run("/usr/sbin/screencapture", ["-x", "-t", "png", path]);
+    const bytes = await readFile(path);
+    if (bytes.length === 0) throw new Error("Screen Recording permission test returned no image.");
+  } finally {
+    await rm(directory, { force: true, recursive: true }).catch(() => undefined);
+  }
+}
+
 export async function openMacApp(appName: string): Promise<void> {
   if (process.platform !== "darwin") throw new Error("Mac computer control requires macOS.");
   const name = validateAppName(appName);

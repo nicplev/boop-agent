@@ -2,9 +2,9 @@ import express from "express";
 import type { NextFunction, Request, Response } from "express";
 import { isTrustedLocalRequest } from "./local-access.js";
 import {
-  captureMacScreenshot,
   listVisibleMacApps,
   macComputerStatus,
+  probeMacScreenCapturePermission,
 } from "./computer/macos.js";
 import {
   activeComputerSessions,
@@ -108,7 +108,7 @@ export function createComputerRouter(): express.Router {
         );
       }
       const apps = await listVisibleMacApps();
-      await captureMacScreenshot();
+      await probeMacScreenCapturePermission();
       lastScreenCaptureProbe = { ok: true, checkedAt: Date.now() };
       res.json({
         ok: true,
