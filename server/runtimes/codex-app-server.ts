@@ -461,7 +461,13 @@ class CodexAppServerClient {
           await this.request?.onToolResult?.(`mcp__${namespace}__${toolName}`, result.text);
           const response: DynamicToolCallResponse = {
             success: result.success ?? true,
-            contentItems: [{ type: "inputText", text: result.text }],
+            contentItems: [
+              { type: "inputText", text: result.text },
+              ...(result.images ?? []).map((image) => ({
+                type: "inputImage" as const,
+                imageUrl: `data:${image.mediaType};base64,${image.data}`,
+              })),
+            ],
           };
           this.respond(message.id, response);
           return;

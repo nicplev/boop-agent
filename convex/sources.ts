@@ -152,3 +152,86 @@ export const createWeb = mutation({
     return sourceId;
   },
 });
+
+export const upsertGitHub = mutation({
+  args: {
+    workspaceSecret: v.string(),
+    externalId: v.string(),
+    title: v.string(),
+    summary: v.optional(v.string()),
+    content: v.string(),
+    uri: v.optional(v.string()),
+    metadata: v.optional(v.string()),
+    occurredAt: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    requireLumiWorkspaceSecret(args.workspaceSecret);
+    const externalId = args.externalId.trim();
+    const title = args.title.trim();
+    const content = args.content.trim();
+    if (!externalId) throw new Error("GitHub source externalId is required");
+    if (!title) throw new Error("GitHub source title is required");
+    if (!content) throw new Error("GitHub source content is required");
+    if (content.length > 50_000) {
+      throw new Error("GitHub sources are limited to 50,000 characters");
+    }
+
+    const contentHash = fingerprint(`${title}\n${content}`);
+    const existing = await ctx.db
+      .query("sources")
+      .withIndex("by_source_type_and_external_id", (q) =>
+        q.eq("sourceType", "github").eq("externalId", externalId),
+      )
+      .first();
+    if (existing?.contentHash === contentHash) {
+      return { sourceId: existing._id, changed: false };
+    }
+
+    const now = Date.now();
+    const sourceId = existing
+      ? existing._id
+      : await ctx.db.insert("sources", {
+          sourceType: "github",
+          externalId,
+          title,
+          summary: args.summary?.trim() || undefined,
+          uri: args.uri?.trim() || undefined,
+          contentHash,
+          sensitivity: "restricted",
+          status: "indexed",
+          occurredAt: args.occurredAt,
+          importedAt: now,
+          metadata: args.metadata,
+        });
+
+    if (existing) {
+      const oldChunks = await ctx.db
+        .query("sourceChunks")
+        .withIndex("by_source_id_and_sequence", (q) => q.eq("sourceId", sourceId))
+        .take(100);
+      for (const chunk of oldChunks) await ctx.db.delete(chunk._id);
+      await ctx.db.patch(sourceId, {
+        title,
+        summary: args.summary?.trim() || undefined,
+        uri: args.uri?.trim() || undefined,
+        contentHash,
+        status: "indexed",
+        occurredAt: args.occurredAt,
+        importedAt: now,
+        metadata: args.metadata,
+      });
+    }
+
+    const chunks = content.match(/[\s\S]{1,8000}/g) ?? [];
+    for (const [sequence, chunk] of chunks.entries()) {
+      await ctx.db.insert("sourceChunks", {
+        sourceId,
+        sequence,
+        content: chunk,
+        locator: args.uri?.trim() || "Local Lumi repository",
+        createdAt: now,
+      });
+    }
+    return { sourceId, changed: true };
+  },
+});

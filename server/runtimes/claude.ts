@@ -44,7 +44,14 @@ export function createClaudeMcpServer(
         async (args) => {
           const result = await runtimeTool.handle(args as Record<string, unknown>);
           return {
-            content: [{ type: "text" as const, text: result.text }],
+            content: [
+              { type: "text" as const, text: result.text },
+              ...(result.images ?? []).map((image) => ({
+                type: "image" as const,
+                data: image.data,
+                mimeType: image.mediaType,
+              })),
+            ],
           };
         },
       ),

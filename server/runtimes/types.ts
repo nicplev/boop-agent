@@ -24,6 +24,10 @@ export interface RuntimeTool {
 export interface RuntimeToolResult {
   text: string;
   success?: boolean;
+  images?: Array<{
+    data: string;
+    mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+  }>;
 }
 
 export interface RuntimeRunRequest {
@@ -51,4 +55,11 @@ export interface RuntimeRunResult {
 
 export function runtimeText(text: string, success = true): RuntimeToolResult {
   return { text, success };
+}
+
+export function runtimeImage(
+  text: string,
+  image: NonNullable<RuntimeToolResult["images"]>[number],
+): RuntimeToolResult {
+  return { text, images: [image] };
 }
