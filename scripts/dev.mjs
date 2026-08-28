@@ -43,6 +43,8 @@ const publicUrl = envVars.PUBLIC_URL || "";
 const hasStaticUrl =
   publicUrl && !publicUrl.includes("localhost") && !publicUrl.includes("127.0.0.1");
 const useNgrok = !hasStaticUrl || Boolean(ngrokDomain);
+const useCloudflareNamedTunnel = envVars.CLOUDFLARE_NAMED_TUNNEL === "true";
+const useCloudflareQuickTunnel = envVars.CLOUDFLARE_QUICK_TUNNEL === "true";
 let convexEnvFile = null;
 
 function writeConvexDevEnvFile() {
@@ -108,6 +110,7 @@ const C = {
   convex: "\x1b[35m",
   debug: "\x1b[33m",
   ngrok: "\x1b[32m",
+  cloudflare: "\x1b[32m",
   upstream: "\x1b[34m",
   banner: "\x1b[1;32m",
   dim: "\x1b[2m",
@@ -131,7 +134,7 @@ const NOISE_TRIGGERS = [
 ];
 const STACK_LINE = /^\s+at\s/;
 
-function run(name, cmd, args, readyPattern) {
+function run(name, cmd, args, readyPattern, optional = false) {
   const child = spawn(cmd, args, {
     cwd: root,
     env: { ...process.env, FORCE_COLOR: "1" },
@@ -154,10 +157,11 @@ function run(name, cmd, args, readyPattern) {
         const localMatch = plain.match(/Local:\s+(http:\/\/\S+)/);
         if (localMatch) dashboardUrl = localMatch[1].replace(/\/$/, "");
       }
-      if (name === "ngrok") {
+      if (name === "ngrok" || name === "cloudflare") {
         const urlMatch =
           plain.match(/\burl=(https:\/\/\S+)/) ||
-          plain.match(/Forwarding\s+(https:\/\/\S+)/);
+          plain.match(/Forwarding\s+(https:\/\/\S+)/) ||
+          plain.match(/\b(https:\/\/[a-z0-9-]+\.trycloudflare\.com)\b/i);
         if (urlMatch) resolveNgrokOutputUrl(urlMatch[1].replace(/\/$/, ""));
       }
 
@@ -177,6 +181,7 @@ function run(name, cmd, args, readyPattern) {
   child.stdout.on("data", feed);
   child.stderr.on("data", feed);
   child.ready = ready;
+  child.optional = optional;
   return child;
 }
 
@@ -241,10 +246,35 @@ ${line}${C.reset}${footer}`);
 // --- main ---------------------------------------------------------------
 let ngrokInstalled = false;
 let ngrokConfigured = false;
+let cloudflaredInstalled = false;
+let cloudflareNamedInstalled = false;
+if (useCloudflareNamedTunnel) {
+  cloudflareNamedInstalled = await hasBinary("cloudflared");
+  if (cloudflareNamedInstalled) {
+    console.log(`
+${C.cloudflare}! Using the configured Cloudflare named tunnel at ${publicUrl}.${C.reset}
+${C.dim}  Lumi will keep the stable public route online and synchronize its
+  signed Sendblue webhook whenever the desktop app starts.${C.reset}
+`);
+  } else {
+    console.log(`
+${C.cloudflare}! CLOUDFLARE_NAMED_TUNNEL is enabled, but cloudflared is not installed.${C.reset}
+${C.dim}  Install it with: brew install cloudflared${C.reset}
+`);
+  }
+}
 if (useNgrok) {
   ngrokInstalled = await hasBinary("ngrok");
   ngrokConfigured = ngrokInstalled && (await commandSucceeds("ngrok", ["config", "check"]));
-  if (!ngrokInstalled) {
+  cloudflaredInstalled =
+    !ngrokConfigured && useCloudflareQuickTunnel && (await hasBinary("cloudflared"));
+  if (cloudflaredInstalled) {
+    console.log(`
+${C.cloudflare}! Using a Cloudflare quick tunnel for Sendblue inbound messages.${C.reset}
+${C.dim}  Lumi will register the temporary public URL with Sendblue automatically
+  whenever the desktop app starts.${C.reset}
+`);
+  } else if (!ngrokInstalled) {
     console.log(`
 ${C.ngrok}! ngrok is not installed — running without a public tunnel.${C.reset}
 ${C.dim}  Install:   brew install ngrok         (macOS)
@@ -300,16 +330,39 @@ const debugChild = run(
 const children = [serverChild, convexChild, debugChild];
 
 let ngrokUrlReady = Promise.resolve(null);
-if (useNgrok && ngrokInstalled && ngrokConfigured) {
+if (cloudflareNamedInstalled) {
+  const cloudflareChild = run(
+    "cloudflare",
+    "cloudflared",
+    ["tunnel", "run", "--no-autoupdate"],
+    undefined,
+    true,
+  );
+  children.push(cloudflareChild);
+  ngrokUrlReady = Promise.resolve(publicUrl);
+} else if (useNgrok && ngrokInstalled && ngrokConfigured) {
   const args = ngrokDomain
     ? ["http", port, `--domain=${ngrokDomain}`, "--log=stdout", "--log-format=term", "--log-level=info"]
     : ["http", port, "--log=stdout", "--log-format=term", "--log-level=info"];
-  const ngrokChild = run("ngrok", "ngrok", args);
+  const ngrokChild = run("ngrok", "ngrok", args, undefined, true);
   children.push(ngrokChild);
   ngrokUrlReady = Promise.race([
     ngrokOutputUrlReady,
     new Promise((resolve) => setTimeout(() => resolve(null), 10000)),
   ]).then((url) => url ?? waitForNgrokUrl().catch(() => null));
+} else if (useNgrok && cloudflaredInstalled) {
+  const cloudflareChild = run(
+    "cloudflare",
+    "cloudflared",
+    ["tunnel", "--url", `http://127.0.0.1:${port}`, "--no-autoupdate"],
+    undefined,
+    true,
+  );
+  children.push(cloudflareChild);
+  ngrokUrlReady = Promise.race([
+    ngrokOutputUrlReady,
+    new Promise((resolve) => setTimeout(() => resolve(null), 20000)),
+  ]);
 }
 
 // Wait for all the core services to be ready before printing the banner,
@@ -393,7 +446,10 @@ Promise.all([
   ngrokUrlReady,
 ])
   .then(async ([, , , ngrokUrl]) => {
-    if (useNgrok && ngrokInstalled && ngrokConfigured) {
+    if (
+      cloudflareNamedInstalled ||
+      (useNgrok && ((ngrokInstalled && ngrokConfigured) || cloudflaredInstalled))
+    ) {
       if (ngrokUrl) {
         // Synchronize both the URL and signing secret. This is required even
         // for a reserved domain because older dashboard-created webhooks may
@@ -405,10 +461,14 @@ Promise.all([
         // so we can refresh it on every restart regardless of whether the
         // domain is reserved.
         await autoRegisterComposioWebhook(ngrokUrl);
-        showBanner(ngrokUrl, Boolean(ngrokDomain), webhookSyncState);
+        showBanner(
+          ngrokUrl,
+          cloudflareNamedInstalled || Boolean(ngrokDomain && ngrokConfigured),
+          webhookSyncState,
+        );
       } else {
         console.log(
-          `${C.ngrok}ngrok${C.reset} │ could not read tunnel URL from http://127.0.0.1:4040 — check ngrok output above.`,
+          `${C.ngrok}tunnel${C.reset} │ could not establish a public URL — check tunnel output above.`,
         );
       }
     } else if (hasStaticUrl) {
@@ -454,6 +514,7 @@ process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 for (const c of children) {
   c.on("exit", (code) => {
+    if (c.optional) return;
     if (!shuttingDown && code !== null && code !== 0) {
       console.error(`\nA child process exited with code ${code}. Shutting down.`);
       shutdown(code);
