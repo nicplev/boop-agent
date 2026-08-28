@@ -72,6 +72,14 @@ function hasBinary(name) {
   });
 }
 
+function commandSucceeds(command, args) {
+  return new Promise((ok) => {
+    const child = spawn(command, args, { stdio: "ignore" });
+    child.on("exit", (code) => ok(code === 0));
+    child.on("error", () => ok(false));
+  });
+}
+
 const nodeCmd = process.env.BOOP_NODE_CMD || "node";
 
 const packageBinPaths = {
@@ -232,8 +240,10 @@ ${line}${C.reset}${footer}`);
 
 // --- main ---------------------------------------------------------------
 let ngrokInstalled = false;
+let ngrokConfigured = false;
 if (useNgrok) {
   ngrokInstalled = await hasBinary("ngrok");
+  ngrokConfigured = ngrokInstalled && (await commandSucceeds("ngrok", ["config", "check"]));
   if (!ngrokInstalled) {
     console.log(`
 ${C.ngrok}! ngrok is not installed — running without a public tunnel.${C.reset}
@@ -243,6 +253,13 @@ ${C.dim}  Install:   brew install ngrok         (macOS)
              (free token at https://dashboard.ngrok.com)
   Without ngrok you can still use the debug dashboard at http://localhost:5173
   — iMessage replies via Sendblue won't work until your server is reachable.${C.reset}
+`);
+  } else if (!ngrokConfigured) {
+    console.log(`
+${C.ngrok}! ngrok is installed but not authenticated — running without a public tunnel.${C.reset}
+${C.dim}  Sign in at https://dashboard.ngrok.com and add your authtoken with:
+    ngrok config add-authtoken <token>
+  The Lumi dashboard remains available locally at http://localhost:5173.${C.reset}
 `);
   }
 }
@@ -283,7 +300,7 @@ const debugChild = run(
 const children = [serverChild, convexChild, debugChild];
 
 let ngrokUrlReady = Promise.resolve(null);
-if (useNgrok && ngrokInstalled) {
+if (useNgrok && ngrokInstalled && ngrokConfigured) {
   const args = ngrokDomain
     ? ["http", port, `--domain=${ngrokDomain}`, "--log=stdout", "--log-format=term", "--log-level=info"]
     : ["http", port, "--log=stdout", "--log-format=term", "--log-level=info"];
@@ -365,7 +382,7 @@ async function autoRegisterComposioWebhook(publicUrl) {
   await new Promise((r) => child.on("exit", r));
 }
 
-if (useNgrok && ngrokInstalled && !ngrokDomain) {
+if (useNgrok && ngrokInstalled && ngrokConfigured && !ngrokDomain) {
   registerSendblueWhenTunnelAppears().catch(() => {});
 }
 
@@ -376,7 +393,7 @@ Promise.all([
   ngrokUrlReady,
 ])
   .then(async ([, , , ngrokUrl]) => {
-    if (useNgrok && ngrokInstalled) {
+    if (useNgrok && ngrokInstalled && ngrokConfigured) {
       if (ngrokUrl) {
         // Synchronize both the URL and signing secret. This is required even
         // for a reserved domain because older dashboard-created webhooks may

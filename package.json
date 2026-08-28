@@ -117,7 +117,7 @@
     "mac": {
       "category": "public.app-category.productivity",
       "identity": null,
-      "icon": "assets/boop.icns",
+      "icon": "assets/lumi-red-face.icns",
       "target": [
         "dmg",
         "zip"

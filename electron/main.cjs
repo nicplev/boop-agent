@@ -180,6 +180,7 @@ function getRuntimeRoot() {
 function getIconPath() {
   const root = runtimeRoot || getRuntimeRoot();
   const candidates = [
+    path.join(root, "assets", "lumi-red-face.png"),
     path.join(root, "assets", "boop-app-icon.png"),
     path.join(root, "assets", "boop.png"),
     path.join(root, "debug", "public", "appicon.png"),
