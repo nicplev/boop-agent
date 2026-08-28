@@ -36,7 +36,13 @@ function workspaceSecret(): string {
 export function normalizePhoneNumber(value: string): string | null {
   const compact = value.trim().replace(/[\s().-]/g, "");
   if (!compact) return null;
-  const normalized = compact.startsWith("+") ? compact : `+${compact}`;
+  let normalized = compact.startsWith("+") ? compact : `+${compact}`;
+  // Australia writes domestic numbers with a trunk `0` (for example 04xx),
+  // but E.164 removes it after +61. Accept the common `+61 04xx` spelling and
+  // canonicalise it to the form Sendblue supplies in inbound webhooks.
+  if (/^\+610\d{9}$/.test(normalized)) {
+    normalized = `+61${normalized.slice(4)}`;
+  }
   return /^\+[1-9]\d{7,14}$/.test(normalized) ? normalized : null;
 }
 
@@ -54,14 +60,33 @@ export function senderFromConversationId(conversationId: string | undefined): st
 export function senderFingerprint(sender: string): string {
   const normalized = normalizePhoneNumber(sender);
   if (!normalized) throw new Error("Enter a valid phone number including country code.");
+  return fingerprintNormalizedSender(normalized);
+}
+
+function fingerprintNormalizedSender(normalized: string): string {
   return createHmac("sha256", workspaceSecret())
     .update(`lumi-computer-sender:${normalized}`)
     .digest("hex");
 }
 
+function legacyAustralianTrunkFingerprint(sender: string): string | null {
+  const normalized = normalizePhoneNumber(sender);
+  if (!normalized || !/^\+61\d{9}$/.test(normalized)) return null;
+  return fingerprintNormalizedSender(`+610${normalized.slice(3)}`);
+}
+
 function constantTimeEqual(left: string, right: string): boolean {
   if (left.length !== right.length) return false;
   return timingSafeEqual(Buffer.from(left), Buffer.from(right));
+}
+
+export function matchesSenderFingerprint(sender: string, expected: string): boolean {
+  if (constantTimeEqual(senderFingerprint(sender), expected)) return true;
+  // Compatibility for pairings created before Australian trunk-prefix
+  // canonicalisation. This aliases only the same Australian number and lets
+  // an existing secure fingerprint continue to work after upgrade.
+  const legacyFingerprint = legacyAustralianTrunkFingerprint(sender);
+  return legacyFingerprint ? constantTimeEqual(legacyFingerprint, expected) : false;
 }
 
 async function setting(key: string): Promise<string | null> {
@@ -124,7 +149,7 @@ export async function isAuthorizedComputerConversation(
   if (!sender) return false;
   const expected = await setting(AUTHORIZED_SENDER_HASH_KEY);
   if (!expected) return false;
-  return constantTimeEqual(senderFingerprint(sender), expected);
+  return matchesSenderFingerprint(sender, expected);
 }
 
 export async function assertAuthorizedComputerConversation(

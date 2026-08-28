@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createHmac } from "node:crypto";
 import { redactToolInputForLog } from "../server/execution-agent.js";
+import {
+  COMPUTER_TOOL_NAMESPACE,
+  createComputerTools,
+} from "../server/computer/tools.js";
 import {
   isBlockedMacApp,
   normalizeKeyName,
@@ -10,6 +15,7 @@ import {
 import {
   getComputerSession,
   maskPhoneNumber,
+  matchesSenderFingerprint,
   normalizePhoneNumber,
   requireComputerSession,
   senderFingerprint,
@@ -34,6 +40,7 @@ describe("paired Mac computer control", () => {
 
   it("normalizes and masks paired phone numbers without retaining the full value", () => {
     expect(normalizePhoneNumber("+61 412 345 678")).toBe("+61412345678");
+    expect(normalizePhoneNumber("+61 0412 345 678")).toBe("+61412345678");
     expect(normalizePhoneNumber("16452437121")).toBe("+16452437121");
     expect(normalizePhoneNumber("not-a-phone")).toBeNull();
     expect(maskPhoneNumber("+61412345678")).toBe("••••5678");
@@ -47,6 +54,20 @@ describe("paired Mac computer control", () => {
     expect(first).toBe(second);
     expect(first).toHaveLength(64);
     expect(first).not.toContain("412345678");
+  });
+
+  it("recognizes the canonical Sendblue form of an Australian legacy pairing", () => {
+    const legacyFingerprint = createHmac(
+      "sha256",
+      "test-workspace-secret-that-is-at-least-32-characters",
+    )
+      .update("lumi-computer-sender:+610412345678")
+      .digest("hex");
+
+    expect(matchesSenderFingerprint("sms:+61412345678".slice(4), legacyFingerprint)).toBe(
+      true,
+    );
+    expect(matchesSenderFingerprint("+61412345679", legacyFingerprint)).toBe(false);
   });
 
   it("clamps sessions, expires them, and separates observe from control", () => {
@@ -78,7 +99,7 @@ describe("paired Mac computer control", () => {
 
   it("redacts desktop text input before agent log persistence", () => {
     expect(
-      redactToolInputForLog("mcp__computer__computer_type_text", {
+      redactToolInputForLog("mcp__lumi-computer__computer_type_text", {
         text: "private draft text",
         purpose: "fill a draft field",
       }),
@@ -86,5 +107,15 @@ describe("paired Mac computer control", () => {
       text: "[redacted]",
       purpose: "fill a draft field",
     });
+  });
+
+  it("uses a non-reserved dynamic tool namespace for Codex", () => {
+    expect(COMPUTER_TOOL_NAMESPACE).toBe("lumi-computer");
+    expect(COMPUTER_TOOL_NAMESPACE).not.toBe("computer");
+    expect(
+      createComputerTools("local:test").every(
+        (tool) => tool.namespace === COMPUTER_TOOL_NAMESPACE,
+      ),
+    ).toBe(true);
   });
 });

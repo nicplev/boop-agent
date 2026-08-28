@@ -22,7 +22,10 @@ import {
   type ComputerSessionMode,
 } from "./security.js";
 
-const NAMESPACE = "computer";
+// `computer` is reserved by the OpenAI Responses API for its built-in
+// computer-use tool. Keep the user-facing integration name as `computer`, but
+// give Lumi's dynamic tools their own namespace so Codex can register them.
+export const COMPUTER_TOOL_NAMESPACE = "lumi-computer";
 
 function safeError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
@@ -56,7 +59,7 @@ function sessionSummary(session: ReturnType<typeof getComputerSession>): string 
 export function createComputerTools(conversationId?: string): RuntimeTool[] {
   return [
     defineRuntimeTool(
-      NAMESPACE,
+      COMPUTER_TOOL_NAMESPACE,
       "computer_status",
       "Check whether this conversation is paired for Mac control, whether computer mode is active, and whether macOS Accessibility permission is available.",
       {},
@@ -83,7 +86,7 @@ export function createComputerTools(conversationId?: string): RuntimeTool[] {
       },
     ),
     defineRuntimeTool(
-      NAMESPACE,
+      COMPUTER_TOOL_NAMESPACE,
       "computer_start_session",
       `Start a short-lived Mac session for this paired conversation. Use "observe" for screenshots/app lists. Use "control" only when the user explicitly asks to operate their Mac. Never infer control permission from an unrelated request. Sessions automatically expire after at most 30 minutes.`,
       {
@@ -108,7 +111,7 @@ export function createComputerTools(conversationId?: string): RuntimeTool[] {
       },
     ),
     defineRuntimeTool(
-      NAMESPACE,
+      COMPUTER_TOOL_NAMESPACE,
       "computer_stop_session",
       "Immediately stop computer mode for this conversation.",
       {},
@@ -127,7 +130,7 @@ export function createComputerTools(conversationId?: string): RuntimeTool[] {
       },
     ),
     defineRuntimeTool(
-      NAMESPACE,
+      COMPUTER_TOOL_NAMESPACE,
       "computer_snapshot",
       "Capture the current Mac screen for visual reasoning. Requires an active observe or control session. Refuses protected apps such as password managers, Terminal, Keychain Access, and System Settings.",
       {},
@@ -146,7 +149,7 @@ export function createComputerTools(conversationId?: string): RuntimeTool[] {
       },
     ),
     defineRuntimeTool(
-      NAMESPACE,
+      COMPUTER_TOOL_NAMESPACE,
       "computer_list_apps",
       "List visible applications currently running on the Mac. Protected applications are omitted.",
       {},
@@ -162,7 +165,7 @@ export function createComputerTools(conversationId?: string): RuntimeTool[] {
       },
     ),
     defineRuntimeTool(
-      NAMESPACE,
+      COMPUTER_TOOL_NAMESPACE,
       "computer_open_app",
       "Open a named Mac application. Requires active control mode. Protected apps, shells, password managers, and security settings are blocked.",
       { appName: z.string().min(1).max(120) },
@@ -178,7 +181,7 @@ export function createComputerTools(conversationId?: string): RuntimeTool[] {
       },
     ),
     defineRuntimeTool(
-      NAMESPACE,
+      COMPUTER_TOOL_NAMESPACE,
       "computer_focus_app",
       "Bring a running Mac application to the front. Requires active control mode. Protected apps are blocked.",
       { appName: z.string().min(1).max(120) },
@@ -194,7 +197,7 @@ export function createComputerTools(conversationId?: string): RuntimeTool[] {
       },
     ),
     defineRuntimeTool(
-      NAMESPACE,
+      COMPUTER_TOOL_NAMESPACE,
       "computer_click",
       "Click screen coordinates after inspecting a fresh computer_snapshot. Requires active control mode. Never click Send, Buy, Delete, permission, password, security, or legal-confirmation controls.",
       {
@@ -214,7 +217,7 @@ export function createComputerTools(conversationId?: string): RuntimeTool[] {
       },
     ),
     defineRuntimeTool(
-      NAMESPACE,
+      COMPUTER_TOOL_NAMESPACE,
       "computer_type_text",
       "Type non-sensitive text into the focused Mac control. Requires active control mode. Never type passwords, authentication codes, payment information, private keys, government identifiers, or text that sends/accepts/commits an external action. Newlines are blocked.",
       {
@@ -233,7 +236,7 @@ export function createComputerTools(conversationId?: string): RuntimeTool[] {
       },
     ),
     defineRuntimeTool(
-      NAMESPACE,
+      COMPUTER_TOOL_NAMESPACE,
       "computer_press_key",
       "Press a non-submitting keyboard key on the Mac. Requires active control mode. Return/Enter is always blocked to prevent accidental sends, purchases, or confirmations.",
       {
@@ -255,5 +258,5 @@ export function createComputerTools(conversationId?: string): RuntimeTool[] {
 }
 
 export function createComputerMcp(conversationId?: string) {
-  return createClaudeMcpServer(NAMESPACE, createComputerTools(conversationId));
+  return createClaudeMcpServer(COMPUTER_TOOL_NAMESPACE, createComputerTools(conversationId));
 }
