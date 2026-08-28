@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireLumiWorkspaceSecret } from "./lumiAuth";
 
 const workItemKind = v.union(
   v.literal("decision"),
@@ -40,8 +41,9 @@ type WorkItemPayload = {
 };
 
 export const listPending = query({
-  args: { limit: v.optional(v.number()) },
+  args: { workspaceSecret: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
+    requireLumiWorkspaceSecret(args.workspaceSecret);
     const limit = Math.max(1, Math.min(args.limit ?? 100, 200));
     return await ctx.db
       .query("proposals")
@@ -53,6 +55,7 @@ export const listPending = query({
 
 export const proposeWorkItem = mutation({
   args: {
+    workspaceSecret: v.string(),
     sourceId: v.id("sources"),
     projectId: v.optional(v.id("projects")),
     kind: workItemKind,
@@ -64,6 +67,7 @@ export const proposeWorkItem = mutation({
     quote: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    requireLumiWorkspaceSecret(args.workspaceSecret);
     const source = await ctx.db.get(args.sourceId);
     if (!source) throw new Error("Source not found");
     if (args.projectId && !(await ctx.db.get(args.projectId))) {
@@ -96,10 +100,12 @@ export const proposeWorkItem = mutation({
 
 export const decide = mutation({
   args: {
+    workspaceSecret: v.string(),
     proposalId: v.id("proposals"),
     decision: v.union(v.literal("accept"), v.literal("reject")),
   },
   handler: async (ctx, args) => {
+    requireLumiWorkspaceSecret(args.workspaceSecret);
     const proposal = await ctx.db.get(args.proposalId);
     if (!proposal) throw new Error("Proposal not found");
     if (proposal.status !== "pending") return { proposalId: args.proposalId };

@@ -88,6 +88,7 @@ export default defineSchema({
       v.literal("drive"),
       v.literal("github"),
       v.literal("conversation"),
+      v.literal("web"),
     ),
     externalId: v.optional(v.string()),
     title: v.string(),

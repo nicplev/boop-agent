@@ -7,7 +7,7 @@ This repository is an early custom fork of [Boop](https://github.com/raroque/boo
 - **Projects** with priorities, status, target dates, summaries, and linked work items.
 - **Work items** for tasks, decisions, risks, follow-ups, and ideas.
 - **AI review** so inferred work stays pending until a person accepts or rejects it.
-- **Sources and evidence** ready for Plaud, Gmail, Drive, GitHub, and conversation ingestion.
+- **Sources and evidence** with protected manual capture and guarded public-webpage ingestion, ready to expand to Plaud, Gmail, Drive, GitHub, and conversations.
 - **Lumi branding and operating instructions** across the dashboard, desktop shell, setup, and agent prompts.
 
 Choose your runtime during setup:
@@ -91,7 +91,7 @@ Built on:
 
 ## Project direction
 
-Lumi Assistant is being developed as an internal operating system for Lumi: one place to understand what matters, what is blocked, what needs a decision, and which source supports each conclusion. The current release establishes the data and interface foundation. Planned iterations will add source ingestion, automatic proposal creation, richer project briefs, and business-specific workflows.
+Lumi Assistant is being developed as an internal operating system for Lumi: one place to understand what matters, what is blocked, what needs a decision, and which source supports each conclusion. The current release establishes structured projects, a human review queue, manual and webpage source ingestion, and server-only protection for that private workspace data. Planned iterations will add connected-source ingestion, automatic proposal extraction, richer project briefs, and business-specific workflows.
 
 ---
 
@@ -398,6 +398,7 @@ Everything lives in `.env.local` (auto-created by `npm run setup`). See `.env.ex
 |---|---|---|
 | `VITE_CONVEX_URL` | yes | Convex deployment URL for the Vite debug UI. Written by `npx convex dev`; the server falls back to this value locally. |
 | `CONVEX_URL` | optional | Server-only Convex URL override for non-Vite deployments. Leave unset locally to avoid Convex CLI ambiguity warnings. |
+| `LUMI_WORKSPACE_SECRET` | yes | Server-only credential protecting Lumi projects, work items, sources, and proposals. `npm run setup` creates and syncs it; use `npm run lumi:secure` to repair or rotate local setup. Never expose it with a `VITE_` prefix. |
 | `SENDBLUE_API_KEY` / `SENDBLUE_API_SECRET` | yes | From your Sendblue dashboard. |
 | `SENDBLUE_FROM_NUMBER` | yes | Your Sendblue-provisioned number. |
 | `BOOP_RUNTIME` | no | `claude` by default. Set `codex` to use local `codex app-server` with the ChatGPT/Codex account from `codex login`. |

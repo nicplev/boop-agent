@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireLumiWorkspaceSecret } from "./lumiAuth";
 
 const sensitivity = v.union(
   v.literal("internal"),
@@ -21,8 +22,9 @@ function fingerprint(value: string): string {
 }
 
 export const listForDashboard = query({
-  args: { limit: v.optional(v.number()) },
+  args: { workspaceSecret: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
+    requireLumiWorkspaceSecret(args.workspaceSecret);
     const limit = Math.max(1, Math.min(args.limit ?? 100, 200));
     return await ctx.db
       .query("sources")
@@ -33,8 +35,9 @@ export const listForDashboard = query({
 });
 
 export const getWithChunks = query({
-  args: { sourceId: v.id("sources") },
+  args: { workspaceSecret: v.string(), sourceId: v.id("sources") },
   handler: async (ctx, args) => {
+    requireLumiWorkspaceSecret(args.workspaceSecret);
     const source = await ctx.db.get(args.sourceId);
     if (!source) return null;
     const chunks = await ctx.db
@@ -48,6 +51,7 @@ export const getWithChunks = query({
 
 export const createManual = mutation({
   args: {
+    workspaceSecret: v.string(),
     title: v.string(),
     summary: v.optional(v.string()),
     content: v.string(),
@@ -55,6 +59,7 @@ export const createManual = mutation({
     occurredAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    requireLumiWorkspaceSecret(args.workspaceSecret);
     const title = args.title.trim();
     const content = args.content.trim();
     if (!title) throw new Error("Source title is required");
@@ -86,6 +91,62 @@ export const createManual = mutation({
       sequence: 0,
       content,
       locator: "Manual capture",
+      createdAt: now,
+    });
+    return sourceId;
+  },
+});
+
+export const createWeb = mutation({
+  args: {
+    workspaceSecret: v.string(),
+    title: v.string(),
+    summary: v.optional(v.string()),
+    content: v.string(),
+    uri: v.string(),
+    externalId: v.string(),
+    sensitivity: v.optional(sensitivity),
+    occurredAt: v.optional(v.number()),
+    metadata: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    requireLumiWorkspaceSecret(args.workspaceSecret);
+    const title = args.title.trim();
+    const content = args.content.trim();
+    const uri = args.uri.trim();
+    if (!title) throw new Error("Source title is required");
+    if (!content) throw new Error("Source content is required");
+    if (!uri) throw new Error("Source URL is required");
+    if (content.length > 50_000) {
+      throw new Error("Imported sources are limited to 50,000 characters");
+    }
+
+    const contentHash = fingerprint(`${title}\n${content}`);
+    const existing = await ctx.db
+      .query("sources")
+      .withIndex("by_content_hash", (q) => q.eq("contentHash", contentHash))
+      .first();
+    if (existing) return existing._id;
+
+    const now = Date.now();
+    const sourceId = await ctx.db.insert("sources", {
+      sourceType: "web",
+      externalId: args.externalId,
+      title,
+      summary: args.summary?.trim() || undefined,
+      uri,
+      contentHash,
+      sensitivity: args.sensitivity ?? "internal",
+      status: "indexed",
+      occurredAt: args.occurredAt,
+      importedAt: now,
+      metadata: args.metadata,
+    });
+    await ctx.db.insert("sourceChunks", {
+      sourceId,
+      sequence: 0,
+      content,
+      locator: uri,
       createdAt: now,
     });
     return sourceId;

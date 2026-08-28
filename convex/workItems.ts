@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireLumiWorkspaceSecret } from "./lumiAuth";
 
 const workItemKind = v.union(
   v.literal("decision"),
@@ -32,6 +33,7 @@ const priority = v.union(
 
 export const listForDashboard = query({
   args: {
+    workspaceSecret: v.string(),
     projectId: v.optional(v.id("projects")),
     kind: v.optional(workItemKind),
     status: v.optional(workItemStatus),
@@ -39,6 +41,7 @@ export const listForDashboard = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    requireLumiWorkspaceSecret(args.workspaceSecret);
     const limit = Math.max(1, Math.min(args.limit ?? 200, 500));
     const scanLimit = Math.min(1000, Math.max(limit * 4, 100));
     const rows = args.projectId
@@ -73,6 +76,7 @@ export const listForDashboard = query({
 
 export const create = mutation({
   args: {
+    workspaceSecret: v.string(),
     projectId: v.optional(v.id("projects")),
     kind: workItemKind,
     title: v.string(),
@@ -87,6 +91,7 @@ export const create = mutation({
     sourceCount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    requireLumiWorkspaceSecret(args.workspaceSecret);
     const title = args.title.trim();
     if (!title) throw new Error("Work item title is required");
     if (args.projectId && !(await ctx.db.get(args.projectId))) {
@@ -116,10 +121,12 @@ export const create = mutation({
 
 export const setStatus = mutation({
   args: {
+    workspaceSecret: v.string(),
     workItemId: v.id("workItems"),
     status: workItemStatus,
   },
   handler: async (ctx, args) => {
+    requireLumiWorkspaceSecret(args.workspaceSecret);
     const item = await ctx.db.get(args.workItemId);
     if (!item) throw new Error("Work item not found");
     await ctx.db.patch(args.workItemId, {
@@ -132,10 +139,12 @@ export const setStatus = mutation({
 
 export const review = mutation({
   args: {
+    workspaceSecret: v.string(),
     workItemId: v.id("workItems"),
     decision: v.union(v.literal("accept"), v.literal("reject")),
   },
   handler: async (ctx, args) => {
+    requireLumiWorkspaceSecret(args.workspaceSecret);
     const item = await ctx.db.get(args.workItemId);
     if (!item) throw new Error("Work item not found");
     if (!item.needsReview) return args.workItemId;

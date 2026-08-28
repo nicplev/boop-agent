@@ -1,6 +1,18 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api.js";
+import type {
+  LumiPriority as Priority,
+  LumiProject,
+  LumiProjectStatus as ProjectStatus,
+  LumiWorkItem,
+  LumiWorkItemKind as WorkItemKind,
+} from "../../../server/lumi-types.js";
+import {
+  createProject,
+  createWorkItem,
+  setWorkItemStatus,
+  updateProject,
+  useLumiSnapshot,
+} from "../lib/lumiApi.js";
 import {
   EmptyState,
   HeaderPill,
@@ -10,19 +22,6 @@ import {
   panelCardClass,
   subtlePanelClass,
 } from "./PanelPrimitives.js";
-
-type ProjectStatus = "planned" | "active" | "paused" | "completed" | "archived";
-type Priority = "low" | "medium" | "high" | "critical";
-type WorkItemKind =
-  | "decision"
-  | "commitment"
-  | "task"
-  | "idea"
-  | "waiting_on"
-  | "blocker"
-  | "risk"
-  | "question"
-  | "opportunity";
 
 const PROJECT_STATUS: ProjectStatus[] = ["planned", "active", "paused", "completed"];
 const PRIORITIES: Priority[] = ["low", "medium", "high", "critical"];
@@ -62,9 +61,7 @@ function priorityTone(value: string) {
 }
 
 export function ProjectsPanel({ isDark }: { isDark: boolean }) {
-  const projects = useQuery(api.projects.listForDashboard, { limit: 100 });
-  const workItems = useQuery(api.workItems.listForDashboard, { limit: 500 });
-  const createProject = useMutation(api.projects.create);
+  const { snapshot, error: workspaceError, refresh } = useLumiSnapshot();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
@@ -72,16 +69,18 @@ export function ProjectsPanel({ isDark }: { isDark: boolean }) {
   const [status, setStatus] = useState<ProjectStatus>("active");
   const [priority, setPriority] = useState<Priority>("high");
   const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
+  const projects = snapshot?.projects;
   const list = projects ?? [];
-  const items = workItems ?? [];
-  const selectedProject = list.find((project: any) => project._id === selectedProjectId);
+  const items = snapshot?.workItems ?? [];
+  const selectedProject = list.find((project) => project._id === selectedProjectId);
   const selectedItems = selectedProjectId
-    ? items.filter((item: any) => item.projectId === selectedProjectId)
+    ? items.filter((item) => item.projectId === selectedProjectId)
     : [];
   const itemCounts = useMemo(() => {
     const counts = new Map<string, { open: number; review: number }>();
-    for (const item of items as any[]) {
+    for (const item of items) {
       if (!item.projectId) continue;
       const current = counts.get(item.projectId) ?? { open: 0, review: 0 };
       if (!["completed", "resolved", "rejected", "superseded"].includes(item.status)) {
@@ -97,8 +96,9 @@ export function ProjectsPanel({ isDark }: { isDark: boolean }) {
     event.preventDefault();
     if (!name.trim() || saving) return;
     setSaving(true);
+    setActionError(null);
     try {
-      const projectId = await createProject({
+      const result = await createProject({
         name: name.trim(),
         summary: summary.trim() || undefined,
         status,
@@ -107,7 +107,10 @@ export function ProjectsPanel({ isDark }: { isDark: boolean }) {
       setName("");
       setSummary("");
       setShowCreate(false);
-      setSelectedProjectId(String(projectId));
+      await refresh();
+      setSelectedProjectId(result.id);
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "Could not create the project.");
     } finally {
       setSaving(false);
     }
@@ -120,6 +123,7 @@ export function ProjectsPanel({ isDark }: { isDark: boolean }) {
         items={selectedItems}
         isDark={isDark}
         onBack={() => setSelectedProjectId(null)}
+        onRefresh={refresh}
       />
     );
   }
@@ -140,6 +144,11 @@ export function ProjectsPanel({ isDark }: { isDark: boolean }) {
         </button>
       }
     >
+      {(workspaceError || actionError) && (
+        <div className={panelCardClass(isDark, "border-l-2 border-l-[#EC4544] p-3 text-xs text-[#EC4544]")}>
+          {actionError || workspaceError}
+        </div>
+      )}
       {showCreate && (
         <form onSubmit={submitProject} className={panelCardClass(isDark, "space-y-3 p-4 fade-in")}>
           <div className="grid gap-3 md:grid-cols-[1.5fr_1fr_1fr]">
@@ -190,7 +199,7 @@ export function ProjectsPanel({ isDark }: { isDark: boolean }) {
         </EmptyState>
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
-          {list.map((project: any) => {
+          {list.map((project) => {
             const counts = itemCounts.get(project._id) ?? { open: 0, review: 0 };
             return (
               <button
@@ -224,22 +233,33 @@ export function ProjectsPanel({ isDark }: { isDark: boolean }) {
   );
 }
 
-function ProjectDetail({ project, items, isDark, onBack }: { project: any; items: any[]; isDark: boolean; onBack: () => void }) {
-  const createItem = useMutation(api.workItems.create);
-  const setItemStatus = useMutation(api.workItems.setStatus);
-  const updateProject = useMutation(api.projects.update);
+function ProjectDetail({
+  project,
+  items,
+  isDark,
+  onBack,
+  onRefresh,
+}: {
+  project: LumiProject;
+  items: LumiWorkItem[];
+  isDark: boolean;
+  onBack: () => void;
+  onRefresh: () => Promise<unknown>;
+}) {
   const [showAdd, setShowAdd] = useState(false);
   const [kind, setKind] = useState<WorkItemKind>("task");
   const [title, setTitle] = useState("");
   const [ownerName, setOwnerName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function submitItem(event: React.FormEvent) {
     event.preventDefault();
     if (!title.trim() || saving) return;
     setSaving(true);
+    setError(null);
     try {
-      await createItem({
+      await createWorkItem({
         projectId: project._id,
         kind,
         title: title.trim(),
@@ -249,6 +269,9 @@ function ProjectDetail({ project, items, isDark, onBack }: { project: any; items
       setTitle("");
       setOwnerName("");
       setShowAdd(false);
+      await onRefresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not create the work item.");
     } finally {
       setSaving(false);
     }
@@ -272,7 +295,7 @@ function ProjectDetail({ project, items, isDark, onBack }: { project: any; items
         <span className={`text-xs ${priorityTone(project.priority)}`}>{label(project.priority)} priority</span>
         <div className="ml-auto flex gap-2">
           {project.status !== "completed" && (
-            <button type="button" onClick={() => updateProject({ projectId: project._id, status: "completed" })} className={secondaryButtonClass(isDark)}>
+            <button type="button" onClick={() => void updateProject(project._id, { status: "completed" }).then(onRefresh).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not update the project."))} className={secondaryButtonClass(isDark)}>
               Mark complete
             </button>
           )}
@@ -281,6 +304,12 @@ function ProjectDetail({ project, items, isDark, onBack }: { project: any; items
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className={subtlePanelClass(isDark, "border-l-2 border-l-[#EC4544] p-3 text-xs text-[#EC4544]")}>
+          {error}
+        </div>
+      )}
 
       {showAdd && (
         <form onSubmit={submitItem} className={subtlePanelClass(isDark, "grid gap-3 p-4 fade-in md:grid-cols-[160px_1fr_220px_auto]")}>
@@ -293,13 +322,16 @@ function ProjectDetail({ project, items, isDark, onBack }: { project: any; items
         </form>
       )}
 
-      <WorkItemSection title="Open state" items={openItems} isDark={isDark} onComplete={(item) => setItemStatus({ workItemId: item._id, status: item.kind === "decision" ? "resolved" : "completed" })} />
+      <WorkItemSection title="Open state" items={openItems} isDark={isDark} onComplete={async (item) => {
+        await setWorkItemStatus(item._id, item.kind === "decision" ? "resolved" : "completed");
+        await onRefresh();
+      }} />
       {closedItems.length > 0 && <WorkItemSection title="Completed or resolved" items={closedItems} isDark={isDark} />}
     </PanelPage>
   );
 }
 
-function WorkItemSection({ title, items, isDark, onComplete }: { title: string; items: any[]; isDark: boolean; onComplete?: (item: any) => void }) {
+function WorkItemSection({ title, items, isDark, onComplete }: { title: string; items: LumiWorkItem[]; isDark: boolean; onComplete?: (item: LumiWorkItem) => void | Promise<void> }) {
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between">
@@ -321,7 +353,7 @@ function WorkItemSection({ title, items, isDark, onComplete }: { title: string; 
             </div>
           </div>
           {onComplete && !item.needsReview && (
-            <button type="button" onClick={() => onComplete(item)} className={secondaryButtonClass(isDark)}>Complete</button>
+            <button type="button" onClick={() => void onComplete(item)} className={secondaryButtonClass(isDark)}>Complete</button>
           )}
         </div>
       ))}

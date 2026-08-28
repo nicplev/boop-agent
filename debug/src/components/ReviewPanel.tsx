@@ -1,5 +1,10 @@
-import { useMutation, useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api.js";
+import { useState } from "react";
+import type { LumiProposal, LumiWorkItem } from "../../../server/lumi-types.js";
+import {
+  decideProposal,
+  reviewWorkItem,
+  useLumiSnapshot,
+} from "../lib/lumiApi.js";
 import {
   EmptyState,
   HeaderPill,
@@ -13,19 +18,29 @@ function label(value: string) {
 }
 
 export function ReviewPanel({ isDark }: { isDark: boolean }) {
-  const items = useQuery(api.workItems.listForDashboard, { needsReview: true, limit: 200 });
-  const proposals = useQuery(api.proposals.listPending, { limit: 200 });
-  const projects = useQuery(api.projects.listForDashboard, { limit: 200 });
-  const review = useMutation(api.workItems.review);
-  const decideProposal = useMutation(api.proposals.decide);
+  const { snapshot, error: workspaceError, refresh } = useLumiSnapshot();
+  const [actingId, setActingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const projectNames = new Map<string, string>(
-    (projects ?? []).map(
-      (project: any): [string, string] => [String(project._id), project.name],
-    ),
+    (snapshot?.projects ?? []).map((project): [string, string] => [project._id, project.name]),
   );
-  const list = items ?? [];
-  const proposalList = proposals ?? [];
+  const list = (snapshot?.workItems ?? []).filter((item) => item.needsReview);
+  const proposalList = snapshot?.proposals ?? [];
   const pendingCount = list.length + proposalList.length;
+
+  async function act(targetId: string, operation: () => Promise<unknown>) {
+    if (actingId) return;
+    setActingId(targetId);
+    setActionError(null);
+    try {
+      await operation();
+      await refresh();
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "Could not record this decision.");
+    } finally {
+      setActingId(null);
+    }
+  }
 
   return (
     <PanelPage
@@ -34,7 +49,13 @@ export function ReviewPanel({ isDark }: { isDark: boolean }) {
       description="AI-extracted changes stay proposed until you accept or reject them."
       stat={<HeaderPill isDark={isDark}>{pendingCount} pending</HeaderPill>}
     >
-      {items === undefined || proposals === undefined ? (
+      {(workspaceError || actionError) && (
+        <div className={panelCardClass(isDark, "border-l-2 border-l-[#EC4544] p-3 text-xs text-[#EC4544]")}>
+          {actionError || workspaceError}
+        </div>
+      )}
+
+      {snapshot === undefined ? (
         <div className="space-y-3">
           {[1, 2, 3].map((item) => <div key={item} className={panelCardClass(isDark, "h-28 shimmer")} />)}
         </div>
@@ -44,7 +65,7 @@ export function ReviewPanel({ isDark }: { isDark: boolean }) {
         </EmptyState>
       ) : (
         <div className="space-y-3">
-          {proposalList.map((proposal: any) => (
+          {proposalList.map((proposal: LumiProposal) => (
             <div key={proposal._id} className={panelCardClass(isDark, "border-l-2 border-l-[#F2B705] p-4 fade-in")}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                 <div className="min-w-0 flex-1">
@@ -60,13 +81,13 @@ export function ReviewPanel({ isDark }: { isDark: boolean }) {
                   <p className={`mt-1 text-xs leading-5 ${mutedTextClass(isDark)}`}>{proposal.summary}</p>
                 </div>
                 <div className="flex shrink-0 gap-2">
-                  <button type="button" onClick={() => decideProposal({ proposalId: proposal._id, decision: "reject" })} className={`rounded-xl border px-3 py-1.5 text-xs font-medium ${isDark ? "border-white/10 text-zinc-400 hover:bg-white/5" : "border-[#E5E2DC] text-zinc-600 hover:bg-[#FBFAF6]"}`}>Reject</button>
-                  <button type="button" onClick={() => decideProposal({ proposalId: proposal._id, decision: "accept" })} className="rounded-xl bg-[#51BA65] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#429654]">Accept</button>
+                  <button disabled={actingId === proposal._id} type="button" onClick={() => void act(proposal._id, () => decideProposal(proposal._id, "reject"))} className={`rounded-xl border px-3 py-1.5 text-xs font-medium disabled:opacity-40 ${isDark ? "border-white/10 text-zinc-400 hover:bg-white/5" : "border-[#E5E2DC] text-zinc-600 hover:bg-[#FBFAF6]"}`}>Reject</button>
+                  <button disabled={actingId === proposal._id} type="button" onClick={() => void act(proposal._id, () => decideProposal(proposal._id, "accept"))} className="rounded-xl bg-[#51BA65] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#429654] disabled:opacity-40">Accept</button>
                 </div>
               </div>
             </div>
           ))}
-          {list.map((item: any) => (
+          {list.map((item: LumiWorkItem) => (
             <div key={item._id} className={panelCardClass(isDark, "p-4 fade-in")}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                 <div className="min-w-0 flex-1">
@@ -84,8 +105,8 @@ export function ReviewPanel({ isDark }: { isDark: boolean }) {
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-2">
-                  <button type="button" onClick={() => review({ workItemId: item._id, decision: "reject" })} className={`rounded-xl border px-3 py-1.5 text-xs font-medium ${isDark ? "border-white/10 text-zinc-400 hover:bg-white/5" : "border-[#E5E2DC] text-zinc-600 hover:bg-[#FBFAF6]"}`}>Reject</button>
-                  <button type="button" onClick={() => review({ workItemId: item._id, decision: "accept" })} className="rounded-xl bg-[#51BA65] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#429654]">Accept</button>
+                  <button disabled={actingId === item._id} type="button" onClick={() => void act(item._id, () => reviewWorkItem(item._id, "reject"))} className={`rounded-xl border px-3 py-1.5 text-xs font-medium disabled:opacity-40 ${isDark ? "border-white/10 text-zinc-400 hover:bg-white/5" : "border-[#E5E2DC] text-zinc-600 hover:bg-[#FBFAF6]"}`}>Reject</button>
+                  <button disabled={actingId === item._id} type="button" onClick={() => void act(item._id, () => reviewWorkItem(item._id, "accept"))} className="rounded-xl bg-[#51BA65] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#429654] disabled:opacity-40">Accept</button>
                 </div>
               </div>
             </div>

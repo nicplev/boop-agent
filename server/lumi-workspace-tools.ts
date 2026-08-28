@@ -1,7 +1,15 @@
 import { z } from "zod";
-import { api } from "../convex/_generated/api.js";
-import type { Id } from "../convex/_generated/dataModel.js";
-import { convex } from "./convex-client.js";
+import {
+  createLumiProject,
+  createLumiWorkItem,
+  listLumiProjects,
+  listLumiSources,
+  listLumiWorkItems,
+  proposeLumiWorkItem,
+  readLumiSource,
+  setLumiWorkItemStatus,
+  updateLumiProject,
+} from "./lumi-workspace-client.js";
 import { defineRuntimeTool } from "./runtimes/tool.js";
 import { runtimeText, type RuntimeTool } from "./runtimes/types.js";
 
@@ -30,18 +38,6 @@ const workItemStatus = z.enum([
   "superseded",
 ]);
 
-function projectId(value: string): Id<"projects"> {
-  return value as Id<"projects">;
-}
-
-function workItemId(value: string): Id<"workItems"> {
-  return value as Id<"workItems">;
-}
-
-function sourceId(value: string): Id<"sources"> {
-  return value as Id<"sources">;
-}
-
 export function createLumiWorkspaceTools(): RuntimeTool[] {
   return [
     defineRuntimeTool(
@@ -53,7 +49,7 @@ export function createLumiWorkspaceTools(): RuntimeTool[] {
         limit: z.number().int().min(1).max(100).optional().default(50),
       },
       async (args) => {
-        const projects = await convex.query(api.projects.listForDashboard, {
+        const projects = await listLumiProjects({
           limit: args.limit,
           ...(args.status ? { status: args.status } : {}),
         });
@@ -84,7 +80,7 @@ export function createLumiWorkspaceTools(): RuntimeTool[] {
           .describe("Optional target timestamp in Unix milliseconds."),
       },
       async (args) => {
-        const id = await convex.mutation(api.projects.create, args);
+        const id = await createLumiProject(args);
         return runtimeText(`Created project [${id}] ${args.name}.`);
       },
     ),
@@ -106,10 +102,7 @@ export function createLumiWorkspaceTools(): RuntimeTool[] {
           .describe("Unix milliseconds, or null to clear the target date."),
       },
       async (args) => {
-        await convex.mutation(api.projects.update, {
-          ...args,
-          projectId: projectId(args.projectId),
-        });
+        await updateLumiProject(args);
         return runtimeText(`Updated project [${args.projectId}].`);
       },
     ),
@@ -126,11 +119,7 @@ export function createLumiWorkspaceTools(): RuntimeTool[] {
         limit: z.number().int().min(1).max(200).optional().default(100),
       },
       async (args) => {
-        const { projectId: rawProjectId, ...filters } = args;
-        const items = await convex.query(api.workItems.listForDashboard, {
-          ...filters,
-          ...(rawProjectId ? { projectId: projectId(rawProjectId) } : {}),
-        });
+        const items = await listLumiWorkItems(args);
         if (items.length === 0) return runtimeText("No matching work items.");
         return runtimeText(
           items
@@ -163,10 +152,8 @@ Set needsReview=false only when the user explicitly stated or confirmed the item
         sourceCount: z.number().int().min(0).optional().default(0),
       },
       async (args) => {
-        const { projectId: rawProjectId, ...item } = args;
-        const id = await convex.mutation(api.workItems.create, {
-          ...item,
-          ...(rawProjectId ? { projectId: projectId(rawProjectId) } : {}),
+        const id = await createLumiWorkItem({
+          ...args,
           status: args.needsReview ? "proposed" : "open",
         });
         return runtimeText(
@@ -186,10 +173,7 @@ Set needsReview=false only when the user explicitly stated or confirmed the item
         status: workItemStatus,
       },
       async (args) => {
-        await convex.mutation(api.workItems.setStatus, {
-          workItemId: workItemId(args.workItemId),
-          status: args.status,
-        });
+        await setLumiWorkItemStatus(args);
         return runtimeText(`Set work item [${args.workItemId}] to ${args.status}.`);
       },
     ),
@@ -200,7 +184,7 @@ Set needsReview=false only when the user explicitly stated or confirmed the item
       "List Lumi's captured evidence sources. Use this to find the stable sourceId before reading or proposing from a source.",
       { limit: z.number().int().min(1).max(100).optional().default(50) },
       async (args) => {
-        const sources = await convex.query(api.sources.listForDashboard, args);
+        const sources = await listLumiSources(args);
         if (sources.length === 0) return runtimeText("No sources captured yet.");
         return runtimeText(
           sources
@@ -219,9 +203,7 @@ Set needsReview=false only when the user explicitly stated or confirmed the item
       "Read one captured Lumi source and its content chunks. Use only when the source is relevant to the user's request.",
       { sourceId: z.string() },
       async (args) => {
-        const result = await convex.query(api.sources.getWithChunks, {
-          sourceId: sourceId(args.sourceId),
-        });
+        const result = await readLumiSource(args.sourceId);
         if (!result) return runtimeText("Source not found.", false);
         return runtimeText(
           `Source: ${result.source.title}\nSensitivity: ${result.source.sensitivity}\nSummary: ${result.source.summary ?? "(none)"}\n\n${result.chunks.map((chunk) => chunk.content).join("\n\n")}`,
@@ -245,12 +227,7 @@ Set needsReview=false only when the user explicitly stated or confirmed the item
         quote: z.string().optional().describe("Short supporting excerpt from the source."),
       },
       async (args) => {
-        const { sourceId: rawSourceId, projectId: rawProjectId, ...proposal } = args;
-        const id = await convex.mutation(api.proposals.proposeWorkItem, {
-          ...proposal,
-          sourceId: sourceId(rawSourceId),
-          ...(rawProjectId ? { projectId: projectId(rawProjectId) } : {}),
-        });
+        const id = await proposeLumiWorkItem(args);
         return runtimeText(`Created evidence-linked proposal [${id}] for human review.`);
       },
     ),

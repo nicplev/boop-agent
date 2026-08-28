@@ -20,6 +20,7 @@ import { createBrowserRouter } from "./browser-routes.js";
 import { createAppleRouter } from "./apple-routes.js";
 import { closeLocalBrowser } from "./browser/launcher.js";
 import { createChangelogRouter } from "./changelog.js";
+import { createLumiRouter } from "./lumi-routes.js";
 import {
   getRuntimeConfig,
   resolveModelInput,
@@ -56,6 +57,7 @@ async function main() {
   }
 
   const app = express();
+  app.disable("x-powered-by");
   app.use((req, res, next) => {
     if (isPublicServerRequest(req) || isTrustedLocalRequest(req)) {
       next();
@@ -64,6 +66,13 @@ async function main() {
     res.status(404).json({ error: "not found" });
   });
   app.use(cors());
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    next();
+  });
   // Composio webhook receiver must read raw bytes for HMAC verification, so
   // its body parser is mounted BEFORE the global express.json. Without this
   // ordering the JSON parser consumes the stream first and the raw buffer
@@ -139,6 +148,7 @@ async function main() {
   app.use("/browser", createBrowserRouter());
   app.use("/apple", createAppleRouter());
   app.use("/changelog", createChangelogRouter());
+  app.use("/lumi", createLumiRouter());
 
   app.post("/agents/:id/cancel", (req, res) => {
     const ok = cancelAgent(req.params.id);

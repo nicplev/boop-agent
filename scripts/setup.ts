@@ -977,6 +977,9 @@ ${claudeInstalled ? "✓ Claude Code found on PATH." : "⚠ Claude Code was not 
         console.log(`\n✓ Synced VITE_CONVEX_URL → ${url}`);
       }
     }
+
+    console.log("\nSecuring Lumi projects, sources, work items, and proposals…");
+    await runInherit("node", ["scripts/configure-lumi-security.mjs"]);
   } else {
     console.log("\nSkipped Convex. Run `npx convex dev` yourself when ready.");
   }
