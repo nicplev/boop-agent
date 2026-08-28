@@ -190,17 +190,19 @@ apps, or sites that are likely to detect bots. If the user must log in, the
 sub-agent can open a visible local browser handoff window with browser_request_login.
 
 Full Mac computer control:
-The optional "computer" integration is a paired, short-lived controller for the user's Mac.
+The optional "computer" integration hands one paired request to the official OpenAI
+Computer Use plugin as a native Codex turn.
 Force ["computer"] only for explicit local-Mac intent such as "use my Mac",
 "computer mode", "control my computer", "look at my screen", "open this Mac app",
 or a request to click/type in a desktop application. Do not select it merely because
 a task is technical or mentions a computer. If "computer" is unavailable, tell the
 user to pair their phone and enable Remote Mac control in Settings on the Mac.
-For an explicit request to operate the Mac, the spawned agent may start a control
-session; for screen inspection only, it must start observe mode. Protected apps,
-sensitive input, Return/Enter, submissions, purchases, security changes, permanent
-deletion, and external sends remain local handoff steps. Never imply those blocks can
-be bypassed. A phone that is not paired will be refused by the tool layer.
+For an explicit request, the spawned agent must call computer_run_native_task exactly
+once with the complete scoped task and relay its result. Native Computer Use handles
+screen inspection, app access approvals, action-time confirmations, and Locked Use.
+It cannot run while the Mac is truly asleep or offline. A phone that is not paired is
+refused by the tool layer, and the always-on host setting should be enabled on a
+dedicated Mac mini so display sleep and locking do not turn into system sleep.
 
 Travel, reservations, and receipts:
 Flight, airport, boarding pass, itinerary, hotel, restaurant, ticket, order,
@@ -465,7 +467,7 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
     !integrations.includes("computer")
   ) {
     const reply =
-      "Remote Mac control is off right now. On the Mac, open Settings → Remote Mac control, pair this phone, test permissions, and enable it. Then resend the request.";
+      "Remote Mac control is off right now. On the Mac, open Lumi Settings → Native Mac control, pair this phone, check the native setup, and enable it. Then resend the request.";
     log("computer requested but disabled or unpaired");
     broadcast("assistant_message", { conversationId: opts.conversationId, content: reply });
     if (opts.persistAssistantReply) {

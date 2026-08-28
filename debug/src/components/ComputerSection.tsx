@@ -11,17 +11,28 @@ import { panelCardClass, subtlePanelClass } from "./PanelPrimitives.js";
 
 interface ComputerStatus {
   enabled: boolean;
+  alwaysOnHost: boolean;
   paired: boolean;
   pairedLabel: string;
   platformSupported: boolean;
-  accessibilityEnabled: boolean;
-  frontmostApp: string;
-  screenCapture: { ok: boolean; checkedAt: number; error?: string } | null;
-  activeSessions: Array<{
-    mode: "observe" | "control";
-    expiresAt: number;
-    remainingMinutes: number;
-  }>;
+  native: {
+    codexAvailable: boolean;
+    computerUseInstalled: boolean;
+    computerUseEnabled: boolean;
+    lockedUseInstalled: boolean;
+    ready: boolean;
+    activeRun: null | { id: string; startedAt: number; elapsedSeconds: number };
+  };
+  power: {
+    supported: boolean;
+    onAcPower: boolean;
+    powerSource: "ac" | "battery" | "unknown";
+    displaySleepMinutes: number | null;
+    systemSleepMinutes: number | null;
+    wakeOnNetworkAccess: boolean | null;
+    assertionActive: boolean;
+    alwaysOnReady: boolean;
+  };
 }
 
 type Message = { tone: "ok" | "err"; text: string };
@@ -72,14 +83,22 @@ export function ComputerSection({ isDark }: { isDark: boolean }) {
           path === "pair"
             ? `Paired ${data.pairedLabel}. The pairing record stores only a keyed fingerprint.`
             : path === "unpair"
-              ? "Phone unpaired and remote Mac control disabled."
+              ? "Phone unpaired; native Mac control and always-on host mode are off."
               : path === "stop-all"
-                ? `Stopped ${data.stopped ?? 0} active computer session(s).`
-                : path === "test-permissions"
-                  ? "Screen Recording and Accessibility checks passed."
+                ? data.nativeStopped
+                  ? "Stopped the active native Computer Use task."
+                  : "No native Computer Use task was running."
+                : path === "test-native"
+                  ? "The official Computer Use plugin is installed and enabled."
+                  : path === "open-native-settings"
+                    ? "Opened ChatGPT settings. Choose Computer Use to review Locked Use and app access."
+                    : path === "always-on"
+                      ? body?.enabled
+                        ? "Always-on host mode enabled. The display may sleep and the Mac may lock, but idle system sleep is prevented while Lumi runs on AC power."
+                        : "Always-on host mode disabled."
                   : body?.enabled
-                    ? "Remote Mac control enabled."
-                    : "Remote Mac control disabled and sessions stopped.",
+                    ? "Native Mac control enabled."
+                    : "Native Mac control disabled and its active task stopped.",
       });
       if (path === "pair") setPhoneNumber("");
     } catch (error) {
@@ -93,13 +112,11 @@ export function ComputerSection({ isDark }: { isDark: boolean }) {
   const muted = isDark ? "text-zinc-400" : "text-zinc-500";
   const subtle = isDark ? "text-zinc-500" : "text-zinc-400";
   const label = isDark ? "text-zinc-50" : "text-zinc-950";
-  const activeSession = status?.activeSessions[0];
   const ready = Boolean(
     status?.enabled &&
       status.paired &&
       status.platformSupported &&
-      status.accessibilityEnabled &&
-      status.screenCapture?.ok,
+      status.native.ready,
   );
 
   return (
@@ -114,10 +131,11 @@ export function ComputerSection({ isDark }: { isDark: boolean }) {
             <HugeiconsIcon icon={ComputerSettingsIcon} size={20} strokeWidth={1.8} />
           </span>
           <div className="min-w-0">
-            <div className={`text-sm font-medium ${label}`}>Remote Mac control</div>
+            <div className={`text-sm font-medium ${label}`}>Native Mac control</div>
             <div className={`text-xs mt-1 leading-relaxed max-w-3xl ${muted}`}>
-              Lets Lumi inspect and operate this Mac from an explicitly requested iMessage session.
-              Only the locally paired phone is accepted, and every session expires automatically.
+              Sends an explicitly requested iMessage task into the official OpenAI Computer Use
+              plugin. Only the locally paired phone is accepted; native app approvals and
+              action-time confirmations remain in force.
             </div>
             <div className={`text-[10px] mono mt-2 ${subtle}`}>
               {status?.paired ? `paired controller ${status.pairedLabel}` : "no phone paired"}
@@ -143,7 +161,7 @@ export function ComputerSection({ isDark }: { isDark: boolean }) {
             type="button"
             role="switch"
             aria-checked={status?.enabled ?? false}
-            aria-label="Toggle Remote Mac control"
+            aria-label="Toggle native Mac control"
             disabled={!status?.paired || busy !== null}
             onClick={() => call("Enable", "enabled", { enabled: !status?.enabled })}
             className={`relative h-7 w-12 rounded-full transition-colors disabled:opacity-40 ${
@@ -196,24 +214,60 @@ export function ComputerSection({ isDark }: { isDark: boolean }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
             <Metric label="Controller" value={status.pairedLabel} isDark={isDark} />
             <Metric
-              label="Accessibility"
-              value={status.accessibilityEnabled ? "Allowed" : "Permission needed"}
+              label="Computer Use"
+              value={status.native.ready ? "Installed · enabled" : "Setup needed"}
               isDark={isDark}
             />
             <Metric
-              label="Screen Recording"
-              value={status.screenCapture?.ok ? "Allowed" : "Test needed"}
+              label="Locked use"
+              value={status.native.lockedUseInstalled ? "Installed" : "Enable in ChatGPT"}
               isDark={isDark}
             />
             <Metric
-              label="Session"
+              label="Native task"
               value={
-                activeSession
-                  ? `${activeSession.mode} · ${activeSession.remainingMinutes}m`
+                status.native.activeRun
+                  ? `Running · ${Math.max(1, Math.ceil(status.native.activeRun.elapsedSeconds / 60))}m`
                   : "Inactive"
               }
               isDark={isDark}
             />
+          </div>
+        )}
+
+        {status?.paired && (
+          <div className={subtlePanelClass(isDark, "p-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3")}>
+            <div className="min-w-0">
+              <div className={`text-xs font-medium ${label}`}>Always-on Mac host</div>
+              <div className={`text-[11px] mt-1 leading-relaxed ${muted}`}>
+                Recommended for the Mac mini. It prevents idle system sleep while Lumi is running
+                on power, while still allowing display sleep and the normal macOS lock screen.
+              </div>
+              <div className={`text-[10px] mono mt-2 ${subtle}`}>
+                {status.alwaysOnHost
+                  ? status.power.alwaysOnReady
+                    ? "awake assertion active · AC power"
+                    : `enabled · ${status.power.powerSource === "battery" ? "connect power" : "assertion starting"}`
+                  : `off · system sleep ${status.power.systemSleepMinutes === 0 ? "already disabled" : "allowed"}`}
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={status.alwaysOnHost}
+              aria-label="Toggle always-on Mac host"
+              disabled={busy !== null}
+              onClick={() => call("Always-on host", "always-on", { enabled: !status.alwaysOnHost })}
+              className={`relative h-7 w-12 rounded-full transition-colors disabled:opacity-40 shrink-0 ${
+                status.alwaysOnHost ? "bg-emerald-500" : isDark ? "bg-zinc-700" : "bg-zinc-300"
+              }`}
+            >
+              <span
+                className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  status.alwaysOnHost ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
           </div>
         )}
 
@@ -222,14 +276,22 @@ export function ComputerSection({ isDark }: { isDark: boolean }) {
             isDark={isDark}
             icon={PlayIcon}
             disabled={!status?.paired || busy !== null}
-            onClick={() => call("Test permissions", "test-permissions")}
+            onClick={() => call("Check native setup", "test-native")}
           >
-            {busy === "Test permissions" ? "Testing…" : "Test permissions"}
+            {busy === "Check native setup" ? "Checking…" : "Check native setup"}
+          </ActionButton>
+          <ActionButton
+            isDark={isDark}
+            icon={ComputerSettingsIcon}
+            disabled={busy !== null}
+            onClick={() => call("Open ChatGPT settings", "open-native-settings")}
+          >
+            Open ChatGPT settings
           </ActionButton>
           <ActionButton
             isDark={isDark}
             icon={CancelCircleIcon}
-            disabled={busy !== null || !(status?.activeSessions.length)}
+            disabled={busy !== null || !status?.native.activeRun}
             onClick={() => call("Stop sessions", "stop-all")}
           >
             Emergency stop
@@ -255,9 +317,9 @@ export function ComputerSection({ isDark }: { isDark: boolean }) {
         </div>
 
         <div className={`text-[11px] leading-relaxed ${muted}`}>
-          Protected apps, Terminal/shells, passwords, security settings, payments, permanent
-          deletion, and Return/Enter are blocked from remote control. Lumi stops before final
-          submission steps.
+          Locked/display-asleep is supported after Locked Use is enabled in ChatGPT. A genuinely
+          sleeping or offline Mac cannot run local software, so keep always-on host mode enabled on
+          the plugged-in Mac mini. Pre-approve only the apps you trust Computer Use to operate.
         </div>
         {message && (
           <div

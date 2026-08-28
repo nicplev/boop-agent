@@ -1,4 +1,5 @@
 import express from "express";
+import { spawn } from "node:child_process";
 import type { NextFunction, Request, Response } from "express";
 import { isTrustedLocalRequest } from "./local-access.js";
 import {
@@ -10,10 +11,19 @@ import {
   activeComputerSessions,
   getComputerSettings,
   pairComputerSender,
+  setComputerAlwaysOnHost,
   setComputerEnabled,
   stopAllComputerSessions,
   unpairComputerSender,
 } from "./computer/security.js";
+import {
+  nativeComputerDiagnostics,
+  stopNativeComputerRun,
+} from "./computer/native.js";
+import {
+  macHostPowerStatus,
+  syncMacAwakeAssertion,
+} from "./computer/power.js";
 
 let lastScreenCaptureProbe: { ok: boolean; checkedAt: number; error?: string } | null = null;
 
@@ -29,10 +39,16 @@ function requireLocalComputerControl(req: Request, res: Response, next: NextFunc
 }
 
 async function statusPayload() {
-  const [settings, mac] = await Promise.all([getComputerSettings(), macComputerStatus()]);
+  const [settings, mac, power] = await Promise.all([
+    getComputerSettings(),
+    macComputerStatus(),
+    macHostPowerStatus(),
+  ]);
   const now = Date.now();
   return {
     ...settings,
+    native: nativeComputerDiagnostics(now),
+    power,
     platformSupported: mac.platformSupported,
     accessibilityEnabled: mac.accessibilityEnabled,
     frontmostApp: mac.blockedFrontmostApp ? "Protected app" : mac.frontmostApp,
@@ -79,6 +95,7 @@ export function createComputerRouter(): express.Router {
         return;
       }
       await setComputerEnabled(req.body.enabled);
+      if (!req.body.enabled) stopNativeComputerRun();
       res.json({ ok: true, status: await statusPayload() });
     } catch (error) {
       res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
@@ -87,12 +104,15 @@ export function createComputerRouter(): express.Router {
 
   router.post("/stop-all", async (_req, res) => {
     const stopped = stopAllComputerSessions();
-    res.json({ ok: true, stopped, status: await statusPayload() });
+    const nativeStopped = stopNativeComputerRun();
+    res.json({ ok: true, stopped, nativeStopped, status: await statusPayload() });
   });
 
   router.post("/unpair", async (_req, res) => {
     try {
+      stopNativeComputerRun();
       await unpairComputerSender();
+      await syncMacAwakeAssertion();
       res.json({ ok: true, status: await statusPayload() });
     } catch (error) {
       res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
@@ -119,6 +139,52 @@ export function createComputerRouter(): express.Router {
       const message = error instanceof Error ? error.message : String(error);
       lastScreenCaptureProbe = { ok: false, checkedAt: Date.now(), error: message };
       res.status(409).json({ ok: false, error: message, status: await statusPayload() });
+    }
+  });
+
+  router.post("/always-on", async (req, res) => {
+    try {
+      if (typeof req.body?.enabled !== "boolean") {
+        res.status(400).json({ ok: false, error: "enabled must be true or false." });
+        return;
+      }
+      const settings = await getComputerSettings();
+      if (req.body.enabled && !settings.paired) {
+        res.status(409).json({ ok: false, error: "Pair an authorised phone first." });
+        return;
+      }
+      await setComputerAlwaysOnHost(req.body.enabled);
+      await syncMacAwakeAssertion();
+      res.json({ ok: true, status: await statusPayload() });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  router.post("/test-native", async (_req, res) => {
+    const native = nativeComputerDiagnostics();
+    if (!native.ready) {
+      res.status(409).json({
+        ok: false,
+        error:
+          "Native Computer Use is not ready. Install and enable the Computer Use plugin in ChatGPT first.",
+        status: await statusPayload(),
+      });
+      return;
+    }
+    res.json({ ok: true, status: await statusPayload() });
+  });
+
+  router.post("/open-native-settings", async (_req, res) => {
+    try {
+      const child = spawn("/usr/bin/open", ["codex://settings"], {
+        detached: true,
+        stdio: "ignore",
+      });
+      child.unref();
+      res.json({ ok: true, status: await statusPayload() });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
     }
   });
 

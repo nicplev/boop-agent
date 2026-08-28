@@ -35,9 +35,13 @@ import {
 import { startImageCleanup } from "./images/clean.js";
 import { isPublicServerRequest, isTrustedLocalRequest } from "./local-access.js";
 import { startCodebaseSyncLoop } from "./codebase/sync.js";
+import { syncMacAwakeAssertion } from "./computer/power.js";
 
 async function main() {
   await loadIntegrations();
+  await syncMacAwakeAssertion().catch((error) =>
+    console.warn("[computer] failed to restore always-on host mode", error),
+  );
   startCleanupLoop();
   startAutomationLoop();
   startHeartbeatLoop();

@@ -3,6 +3,7 @@ import { api } from "../../convex/_generated/api.js";
 import { convex } from "../convex-client.js";
 
 const ENABLED_KEY = "computer_enabled";
+const ALWAYS_ON_HOST_KEY = "computer_always_on_host";
 const AUTHORIZED_SENDER_HASH_KEY = "computer_authorized_sender_hash";
 const AUTHORIZED_SENDER_LABEL_KEY = "computer_authorized_sender_label";
 const MIN_SESSION_MINUTES = 5;
@@ -12,6 +13,7 @@ export type ComputerSessionMode = "observe" | "control";
 
 export interface ComputerSettings {
   enabled: boolean;
+  alwaysOnHost: boolean;
   paired: boolean;
   pairedLabel: string;
 }
@@ -94,16 +96,25 @@ async function setting(key: string): Promise<string | null> {
 }
 
 export async function getComputerSettings(): Promise<ComputerSettings> {
-  const [enabled, senderHash, senderLabel] = await Promise.all([
+  const [enabled, alwaysOnHost, senderHash, senderLabel] = await Promise.all([
     setting(ENABLED_KEY),
+    setting(ALWAYS_ON_HOST_KEY),
     setting(AUTHORIZED_SENDER_HASH_KEY),
     setting(AUTHORIZED_SENDER_LABEL_KEY),
   ]);
   return {
     enabled: enabled === "true",
+    alwaysOnHost: alwaysOnHost === "true",
     paired: Boolean(senderHash),
     pairedLabel: senderLabel ?? "",
   };
+}
+
+export async function setComputerAlwaysOnHost(enabled: boolean): Promise<void> {
+  await convex.mutation(api.settings.set, {
+    key: ALWAYS_ON_HOST_KEY,
+    value: enabled ? "true" : "false",
+  });
 }
 
 export async function setComputerEnabled(enabled: boolean): Promise<void> {
@@ -132,6 +143,7 @@ export async function pairComputerSender(phoneNumber: string): Promise<string> {
 
 export async function unpairComputerSender(): Promise<void> {
   await setComputerEnabled(false);
+  await setComputerAlwaysOnHost(false);
   await convex.mutation(api.settings.clear, { key: AUTHORIZED_SENDER_HASH_KEY });
   await convex.mutation(api.settings.clear, { key: AUTHORIZED_SENDER_LABEL_KEY });
   stopAllComputerSessions();
@@ -237,6 +249,7 @@ export function activeComputerSessions(now = Date.now()): ComputerSession[] {
 
 export const computerSettingKeys = {
   enabled: ENABLED_KEY,
+  alwaysOnHost: ALWAYS_ON_HOST_KEY,
   authorizedSenderHash: AUTHORIZED_SENDER_HASH_KEY,
   authorizedSenderLabel: AUTHORIZED_SENDER_LABEL_KEY,
 } as const;
