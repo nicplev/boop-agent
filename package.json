@@ -98,6 +98,7 @@
       "!**/.env.*.local",
       "!**/.convex/**",
       "!convex/_generated/**",
+      "!server/runtimes/codex-app-server-protocol/**",
       "!debug/dist/**",
       "!data/**",
       "!**/*.log",

@@ -44,6 +44,12 @@ const mutableRuntimeItems = [
   "node_modules",
 ];
 
+// Generated compile-time types are intentionally left out of the installed
+// runtime. The Codex adapter imports these with `import type`, so JavaScript
+// execution does not need them, and avoiding hundreds of tiny files keeps the
+// desktop install fast on iCloud-backed workspaces.
+const excludedRuntimeItems = ["server/runtimes/codex-app-server-protocol"];
+
 function runtimeRootForPlatform() {
   if (process.platform === "darwin") {
     return join(homedir(), "Library", "Application Support", productName, "runtime");
@@ -121,6 +127,12 @@ function isMutableRuntimePath(relativePath) {
   );
 }
 
+function isExcludedRuntimePath(relativePath) {
+  return excludedRuntimeItems.some(
+    (item) => relativePath === item || relativePath.startsWith(`${item}/`),
+  );
+}
+
 function lstatIfExists(value) {
   try {
     return lstatSync(value);
@@ -131,7 +143,7 @@ function lstatIfExists(value) {
 }
 
 function copyRuntimeItem(sourceRoot, targetRoot, relativePath) {
-  if (isMutableRuntimePath(relativePath)) return;
+  if (isMutableRuntimePath(relativePath) || isExcludedRuntimePath(relativePath)) return;
 
   const source = join(sourceRoot, relativePath);
   const target = join(targetRoot, relativePath);
@@ -148,7 +160,12 @@ function copyRuntimeItem(sourceRoot, targetRoot, relativePath) {
     const sourceEntries = new Set(readdirSync(source));
     for (const entry of readdirSync(target)) {
       const childPath = join(relativePath, entry);
-      if (isMutableRuntimePath(childPath) || sourceEntries.has(entry)) continue;
+      if (isMutableRuntimePath(childPath)) continue;
+      if (isExcludedRuntimePath(childPath)) {
+        rmSync(join(target, entry), { force: true, recursive: true });
+        continue;
+      }
+      if (sourceEntries.has(entry)) continue;
       rmSync(join(target, entry), { force: true, recursive: true });
     }
     for (const entry of [...sourceEntries].sort()) {

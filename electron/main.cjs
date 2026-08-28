@@ -17,6 +17,7 @@ const mutableRuntimeItems = [
   "dist",
   "node_modules",
 ];
+const excludedRuntimeItems = ["server/runtimes/codex-app-server-protocol"];
 const runtimeItems = [
   ".env.example",
   "assets",
@@ -80,6 +81,13 @@ function isInsideMutablePath(relativePath) {
   );
 }
 
+function isExcludedRuntimePath(relativePath) {
+  const normalized = relativePath.split(path.sep).join("/");
+  return excludedRuntimeItems.some(
+    (item) => normalized === item || normalized.startsWith(`${item}/`),
+  );
+}
+
 function lstatIfExists(value) {
   try {
     return fs.lstatSync(value);
@@ -90,7 +98,7 @@ function lstatIfExists(value) {
 }
 
 function copyRuntimeItem(sourceRoot, targetRoot, relativePath) {
-  if (isInsideMutablePath(relativePath)) return;
+  if (isInsideMutablePath(relativePath) || isExcludedRuntimePath(relativePath)) return;
 
   const source = path.join(sourceRoot, relativePath);
   const target = path.join(targetRoot, relativePath);
@@ -108,7 +116,12 @@ function copyRuntimeItem(sourceRoot, targetRoot, relativePath) {
     const sourceEntries = new Set(fs.readdirSync(source));
     for (const entry of fs.readdirSync(target)) {
       const childPath = path.join(relativePath, entry);
-      if (isInsideMutablePath(childPath) || sourceEntries.has(entry)) continue;
+      if (isInsideMutablePath(childPath)) continue;
+      if (isExcludedRuntimePath(childPath)) {
+        fs.rmSync(path.join(target, entry), { force: true, recursive: true });
+        continue;
+      }
+      if (sourceEntries.has(entry)) continue;
       fs.rmSync(path.join(target, entry), { force: true, recursive: true });
     }
     for (const entry of fs.readdirSync(source)) {
