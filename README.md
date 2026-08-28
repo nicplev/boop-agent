@@ -325,6 +325,7 @@ Visit `http://localhost:5173` for the debug dashboard (chat, agents, memory, eve
 - **Automations** (`server/automations.ts`) poll every 30s for due jobs, spawn an execution agent to run them, and push results back to the user.
 - **Integrations** are provided by [Composio](https://composio.dev/?utm_source=chris&utm_medium=youtube&utm_campaign=collab). The dispatcher names toolkits by slug (`spawn_agent(integrations: ["gmail"])`); `server/composio.ts` opens a toolkit-scoped Composio session per spawn and wraps its tools as an MCP server. No per-integration code to write.
 - **Local browser use** is a separate optional integration named `browser`. It appears to the dispatcher only after you enable it in Settings, and it controls a persistent local Chrome profile through Patchright.
+- **Remote Mac control** is the optional `computer` integration. It requires a locally paired phone and an expiring observe/control session before any screen or input tool runs.
 
 Deep dive: [ARCHITECTURE.md](./ARCHITECTURE.md). Adding your own tools: [INTEGRATIONS.md](./INTEGRATIONS.md).
 
@@ -424,6 +425,24 @@ Everything lives in `.env.local` (auto-created by `npm run setup`). See `.env.ex
 
 ---
 
+## Remote Mac control from iMessage
+
+Remote Mac control is an optional, macOS-only integration for explicit requests such as "look at my screen", "open Xcode on my Mac", or "use my Mac to click the build button". It is off by default and is separate from Local browser use.
+
+Set it up from **Settings → Remote Mac control**:
+
+1. Pair the phone that texts Lumi, including its country code. The pairing record stores a keyed fingerprint and a last-four-digits label rather than the full number.
+2. Click **Test permissions** and allow Lumi Assistant under macOS **Privacy & Security → Accessibility** and **Screen Recording** when prompted.
+3. Turn on **Remote Mac control**.
+4. Text Lumi an explicit request. Lumi starts an observe or control session for 5–30 minutes and automatically expires it afterward.
+5. Use **Emergency stop** in Settings to end every active session immediately.
+
+The `computer` integration can capture the screen, list visible apps, open or focus an app, click coordinates, type non-sensitive text, and use non-submitting keyboard shortcuts. It does not expose a shell or arbitrary file access. Password managers, Keychain Access, Terminal-style apps, System Settings, automation/script editors, sensitive input, Return/Enter, purchases, permanent deletion, security changes, and final send/submit steps are blocked. Complete those steps directly on the Mac.
+
+Every computer tool re-checks the paired conversation and active session. A valid Sendblue webhook signature alone is not sufficient. Computer settings routes are localhost-only, and typed values are redacted from agent logs. Local browser requests arriving by SMS use the same paired-phone gate.
+
+---
+
 ## Local browser use
 
 Local browser use is for cases where a normal API integration or web fetch is the wrong tool: login-required portals, visual browser workflows, JavaScript-heavy apps, or services that may detect bot-like automation. It is deliberately opt-in.
@@ -438,7 +457,7 @@ How it works:
 
 The browser uses a persistent Chrome/Chromium profile, so cookies and login state can carry across runs. Lumi Assistant does not store third-party service passwords or OAuth tokens for this feature; those live in the local browser profile you choose. The `browser_fill` tool redacts typed values before agent tool-use logs are stored. Settings are stored in Convex under the `settings` table, with `.env.local` values used only as fallbacks.
 
-Browser control HTTP routes are local-only. Requests forwarded through a public tunnel are rejected, so your ngrok/Sendblue URL cannot launch, close, or install a local browser.
+Browser control HTTP routes are local-only. Requests forwarded through a public tunnel are rejected, so your public Sendblue URL cannot launch, close, or install a local browser. Browser actions requested through an SMS agent also require the phone paired under Remote Mac control.
 
 For Codex runtime, local browser tools are exposed internally under the `local_browser` namespace to avoid Codex's reserved browser namespace. The user-facing integration name remains `browser`.
 
@@ -578,6 +597,7 @@ lumi-assistant/
 │   ├── composio.ts                # Composio SDK wrapper (session + toolkit scoping)
 │   ├── composio-routes.ts         # /composio/* HTTP routes for the Debug UI
 │   ├── browser-routes.ts          # /browser/* HTTP routes for Local browser use
+│   ├── computer-routes.ts         # Local-only pairing, permission, and emergency-stop routes
 │   ├── apple-routes.ts            # /apple/* local-only routes for Local Mac data
 │   ├── broadcast.ts               # WS fanout
 │   ├── convex-client.ts           # Convex HTTP client
@@ -589,6 +609,10 @@ lumi-assistant/
 │   ├── browser/
 │   │   ├── launcher.ts            # Patchright Chrome launch/status/actions
 │   │   └── tools.ts               # Local browser runtime/MCP tools
+│   ├── computer/
+│   │   ├── macos.ts               # Guarded screenshots, apps, mouse, and keyboard actions
+│   │   ├── security.ts            # Paired sender fingerprints + expiring sessions
+│   │   └── tools.ts               # Computer runtime/MCP tools
 │   ├── runtimes/
 │   │   ├── claude.ts              # Claude Agent SDK adapter
 │   │   ├── codex-app-server.ts    # Codex app-server adapter
@@ -601,6 +625,7 @@ lumi-assistant/
 │   └── integrations/
 │       ├── registry.ts            # Integration loader
 │       ├── browser-loader.ts      # Registers optional Local browser use
+│       ├── computer-loader.ts     # Registers paired Remote Mac control
 │       └── composio-loader.ts     # Registers each connected Composio toolkit
 ├── convex/
 │   ├── schema.ts

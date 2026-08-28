@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  explicitlyRequestsComputer,
   resolveDirectRuntimeSwitch,
   resolveSpawnIntegrations,
 } from "../server/interaction-agent.js";
@@ -25,6 +26,33 @@ describe("direct runtime switching", () => {
     expect(resolveDirectRuntimeSwitch("what model are you using")).toBeNull();
     expect(resolveDirectRuntimeSwitch("what is Codex?")).toBeNull();
     expect(resolveDirectRuntimeSwitch("can Codex see this image?")).toBeNull();
+  });
+});
+
+describe("remote Mac integration routing", () => {
+  const available = ["gmail", "browser", "computer"];
+
+  it("forces computer only for explicit Mac-control requests", () => {
+    expect(explicitlyRequestsComputer("Start computer mode for 15 minutes")).toBe(true);
+    expect(explicitlyRequestsComputer("Use my Mac to open Xcode")).toBe(true);
+    expect(explicitlyRequestsComputer("Look at my screen and tell me what is open")).toBe(
+      true,
+    );
+    expect(
+      resolveSpawnIntegrations(["gmail"], available, "Use my Mac to open Xcode"),
+    ).toEqual(["computer"]);
+  });
+
+  it("does not force computer for ordinary technical wording", () => {
+    expect(explicitlyRequestsComputer("Explain how Mac computers manage memory")).toBe(false);
+    expect(explicitlyRequestsComputer("Email me the desktop release notes")).toBe(false);
+    expect(
+      resolveSpawnIntegrations(
+        ["gmail"],
+        available,
+        "Email me the desktop release notes",
+      ),
+    ).toEqual(["gmail"]);
   });
 });
 

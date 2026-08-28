@@ -47,13 +47,13 @@ function extractAccounts(input: unknown): string[] {
   return [...accounts];
 }
 
-function isBrowserFillTool(toolName: string): boolean {
+function hasSensitiveTextInput(toolName: string): boolean {
   const shortName = toolName.split("__").pop() ?? toolName;
-  return shortName === "browser_fill";
+  return shortName === "browser_fill" || shortName === "computer_type_text";
 }
 
 export function redactToolInputForLog(toolName: string, input: unknown): unknown {
-  if (!isBrowserFillTool(toolName)) return input;
+  if (!hasSensitiveTextInput(toolName)) return input;
   if (!input || typeof input !== "object" || Array.isArray(input)) return input;
   return {
     ...(input as Record<string, unknown>),
@@ -78,6 +78,14 @@ Local browser:
 - Use browser tools only when native integrations or WebFetch/WebSearch are insufficient: login-only portals, JS-heavy apps, visual workflows, or services likely to detect bots.
 - If you hit a login, MFA, or bot wall and the task requires the user's session, call browser_request_login. It opens a visible local browser instance and returns the exact handoff message to show the user.
 - After browser_request_login, stop and tell the user what to do next. Do not claim the task is complete until they confirm they logged in.
+
+Mac computer control:
+- If the optional "computer" integration is loaded, it is a paired, time-limited local Mac controller.
+- Call computer_start_session only when the user explicitly asked to observe or operate their Mac. Default to observe mode unless clicking, typing, focusing, or opening an app is necessary.
+- Inspect a fresh computer_snapshot before every coordinate click and after any screen-changing action. Do not guess coordinates from an earlier screen.
+- Never use computer control with protected apps, passwords, authentication codes, private keys, payment or banking data, government identifiers, Terminal/shells, system security settings, purchases, legal acceptance, permanent deletion, or messages/events that should use Lumi's draft flow.
+- Return/Enter is intentionally blocked. If the final step would submit, send, purchase, delete, accept, grant permission, or change security, stop before it and tell the user to complete that step locally.
+- Stop computer mode when the requested work is finished.
 
 Apple data:
 - If the "apple" integration is loaded, its tools return read-only local Apple data from the user's Mac. iMessage reads run from the local server with Full Disk Access; Apple Notes and Apple Reminders read from the local server with macOS Automation permission; Apple Calendar uses the optional Apple bridge. They never modify anything.

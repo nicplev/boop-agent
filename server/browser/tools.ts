@@ -3,6 +3,7 @@ import { createClaudeMcpServer } from "../runtimes/claude.js";
 import { defineRuntimeTool } from "../runtimes/tool.js";
 import { runtimeText, type RuntimeTool } from "../runtimes/types.js";
 import { getBrowserSettings } from "../runtime-config.js";
+import { assertAuthorizedComputerConversation } from "../computer/security.js";
 import {
   browserClick,
   browserFill,
@@ -30,15 +31,19 @@ function toolError(err: unknown) {
   return runtimeText(`[browser error] ${message}`, false);
 }
 
-async function wrap(fn: () => Promise<string>) {
+async function wrap(conversationId: string | undefined, fn: () => Promise<string>) {
   try {
+    await assertAuthorizedComputerConversation(conversationId);
     return ok(await fn());
   } catch (err) {
     return toolError(err);
   }
 }
 
-export function createBrowserTools(namespace = RUNTIME_NAMESPACE): RuntimeTool[] {
+export function createBrowserTools(
+  namespace = RUNTIME_NAMESPACE,
+  conversationId?: string,
+): RuntimeTool[] {
   return [
     defineRuntimeTool(
       namespace,
@@ -47,14 +52,14 @@ export function createBrowserTools(namespace = RUNTIME_NAMESPACE): RuntimeTool[]
       {
         url: z.string().describe("URL to open. Include the scheme when possible."),
       },
-      async ({ url }) => wrap(async () => `Opened ${await openBrowserUrl(url)}.`),
+      async ({ url }) => wrap(conversationId, async () => `Opened ${await openBrowserUrl(url)}.`),
     ),
     defineRuntimeTool(
       namespace,
       "browser_snapshot",
       "Return an AI-oriented accessibility snapshot of the current browser page, including element refs like [ref=e2]. Call this before click/fill when possible.",
       {},
-      async () => wrap(browserSnapshot),
+      async () => wrap(conversationId, browserSnapshot),
     ),
     defineRuntimeTool(
       namespace,
@@ -63,7 +68,7 @@ export function createBrowserTools(namespace = RUNTIME_NAMESPACE): RuntimeTool[]
       {
         selector: z.string(),
       },
-      async ({ selector }) => wrap(async () => browserClick(selector)),
+      async ({ selector }) => wrap(conversationId, async () => browserClick(selector)),
     ),
     defineRuntimeTool(
       namespace,
@@ -73,7 +78,7 @@ export function createBrowserTools(namespace = RUNTIME_NAMESPACE): RuntimeTool[]
         selector: z.string(),
         text: z.string(),
       },
-      async ({ selector, text }) => wrap(async () => browserFill(selector, text)),
+      async ({ selector, text }) => wrap(conversationId, async () => browserFill(selector, text)),
     ),
     defineRuntimeTool(
       namespace,
@@ -82,7 +87,7 @@ export function createBrowserTools(namespace = RUNTIME_NAMESPACE): RuntimeTool[]
       {
         key: z.string(),
       },
-      async ({ key }) => wrap(async () => browserPress(key)),
+      async ({ key }) => wrap(conversationId, async () => browserPress(key)),
     ),
     defineRuntimeTool(
       namespace,
@@ -91,21 +96,21 @@ export function createBrowserTools(namespace = RUNTIME_NAMESPACE): RuntimeTool[]
       {
         selector: z.string(),
       },
-      async ({ selector }) => wrap(async () => browserText(selector)),
+      async ({ selector }) => wrap(conversationId, async () => browserText(selector)),
     ),
     defineRuntimeTool(
       namespace,
       "browser_get_url",
       "Return the current browser page URL.",
       {},
-      async () => wrap(browserUrl),
+      async () => wrap(conversationId, browserUrl),
     ),
     defineRuntimeTool(
       namespace,
       "browser_screenshot",
       "Capture a screenshot of the current browser page and return the local PNG path. Use only when the accessibility snapshot is insufficient.",
       {},
-      async () => wrap(async () => `Screenshot saved: ${await browserScreenshot()}`),
+      async () => wrap(conversationId, async () => `Screenshot saved: ${await browserScreenshot()}`),
     ),
     defineRuntimeTool(
       namespace,
@@ -119,6 +124,7 @@ export function createBrowserTools(namespace = RUNTIME_NAMESPACE): RuntimeTool[]
       },
       async ({ url }) => {
         try {
+          await assertAuthorizedComputerConversation(conversationId);
           const settings = await getBrowserSettings();
           if (!settings.loginHandoffEnabled) {
             return runtimeText(
@@ -142,6 +148,9 @@ export function createBrowserTools(namespace = RUNTIME_NAMESPACE): RuntimeTool[]
   ];
 }
 
-export function createBrowserMcp() {
-  return createClaudeMcpServer(MCP_NAMESPACE, createBrowserTools(MCP_NAMESPACE));
+export function createBrowserMcp(conversationId?: string) {
+  return createClaudeMcpServer(
+    MCP_NAMESPACE,
+    createBrowserTools(MCP_NAMESPACE, conversationId),
+  );
 }

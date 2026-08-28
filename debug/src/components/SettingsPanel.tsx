@@ -10,6 +10,7 @@ import {
 } from "../lib/branding.js";
 import { AppleSection } from "./AppleSection.js";
 import { BrowserSection } from "./BrowserSection.js";
+import { ComputerSection } from "./ComputerSection.js";
 
 type RuntimeChoice = "claude" | "codex";
 type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
@@ -66,7 +67,7 @@ const SETTINGS: Setting[] = [
   },
 ];
 
-const RUNTIME_SETTING_COUNT = SETTINGS.length + 5;
+const RUNTIME_SETTING_COUNT = SETTINGS.length + 6;
 const DEMO_PHONE_NUMBER = "+11111111111";
 
 const RUNTIME_OPTIONS: Option<RuntimeChoice>[] = [
@@ -202,6 +203,7 @@ export function SettingsPanel({
             <TimezoneRow key={s.key} setting={s} isDark={isDark} />
           ),
         )}
+        <ComputerSection isDark={isDark} />
         <BrowserSection isDark={isDark} />
         <AppleSection isDark={isDark} />
         <DemoModeRow isDark={isDark} />

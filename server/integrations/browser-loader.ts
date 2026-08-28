@@ -8,8 +8,8 @@ export function registerBrowserIntegration(): void {
     description:
       "Optional local Patchright Chrome/Chromium browser with a persistent profile. Use as a fallback for sites without native integrations, login-required services, visual workflows, or bot-wall-sensitive pages.",
     isEnabled: async () => (await getBrowserSettings()).enabled,
-    createServer: async () => createBrowserMcp(),
-    createTools: async () => createBrowserTools(),
+    createServer: async (ctx) => createBrowserMcp(ctx.conversationId),
+    createTools: async (ctx) => createBrowserTools(undefined, ctx.conversationId),
   });
   console.log("[browser] registered local Patchright browser integration");
 }

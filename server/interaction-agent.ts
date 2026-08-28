@@ -189,6 +189,19 @@ login-only services, sites with no native toolkit, visual workflows, JS-heavy
 apps, or sites that are likely to detect bots. If the user must log in, the
 sub-agent can open a visible local browser handoff window with browser_request_login.
 
+Full Mac computer control:
+The optional "computer" integration is a paired, short-lived controller for the user's Mac.
+Force ["computer"] only for explicit local-Mac intent such as "use my Mac",
+"computer mode", "control my computer", "look at my screen", "open this Mac app",
+or a request to click/type in a desktop application. Do not select it merely because
+a task is technical or mentions a computer. If "computer" is unavailable, tell the
+user to pair their phone and enable Remote Mac control in Settings on the Mac.
+For an explicit request to operate the Mac, the spawned agent may start a control
+session; for screen inspection only, it must start observe mode. Protected apps,
+sensitive input, Return/Enter, submissions, purchases, security changes, permanent
+deletion, and external sends remain local handoff steps. Never imply those blocks can
+be bypassed. A phone that is not paired will be refused by the tool layer.
+
 Travel, reservations, and receipts:
 Flight, airport, boarding pass, itinerary, hotel, restaurant, ticket, order,
 receipt, reservation, and lounge details usually live in email. When "gmail" is
@@ -339,11 +352,28 @@ function explicitlyRequestsBrowser(content: string): boolean {
   return directBrowserIntent || (antiNative && browserMention);
 }
 
+export function explicitlyRequestsComputer(content: string): boolean {
+  const normalized = content.toLowerCase().replace(/\s+/g, " ");
+  return (
+    /\bcomputer mode\b/.test(normalized) ||
+    /\b(?:control|operate|use) (?:my|the) (?:mac|computer|desktop)\b/.test(normalized) ||
+    /\blook at (?:my|the) (?:mac|computer|desktop|screen)\b/.test(normalized) ||
+    /\b(?:click|type|press) (?:on |into |in )?(?:my|the) (?:mac|computer|desktop)\b/.test(
+      normalized,
+    ) ||
+    /\bopen .{1,80} on (?:my|the) mac\b/.test(normalized) ||
+    /\bremote mac control\b/.test(normalized)
+  );
+}
+
 export function resolveSpawnIntegrations(
   requested: string[],
   available: string[],
   content: string,
 ): string[] {
+  if (available.includes("computer") && explicitlyRequestsComputer(content)) {
+    return ["computer"];
+  }
   if (available.includes("browser") && explicitlyRequestsBrowser(content)) {
     return ["browser"];
   }
@@ -417,6 +447,26 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
         ? `Already on ${label}. Next turn will use ${nextConfig.model}.`
         : `Switched to ${label}. Next turn will use ${nextConfig.model}.`;
     log(`runtime switch: ${runtimeConfig.runtime} -> ${directRuntimeSwitch}`);
+    broadcast("assistant_message", { conversationId: opts.conversationId, content: reply });
+    if (opts.persistAssistantReply) {
+      await convex.mutation(api.messages.send, {
+        conversationId: opts.conversationId,
+        role: "assistant",
+        content: reply,
+        turnId,
+      });
+    }
+    return reply;
+  }
+
+  if (
+    opts.kind !== "proactive" &&
+    explicitlyRequestsComputer(opts.content) &&
+    !integrations.includes("computer")
+  ) {
+    const reply =
+      "Remote Mac control is off right now. On the Mac, open Settings → Remote Mac control, pair this phone, test permissions, and enable it. Then resend the request.";
+    log("computer requested but disabled or unpaired");
     broadcast("assistant_message", { conversationId: opts.conversationId, content: reply });
     if (opts.persistAssistantReply) {
       await convex.mutation(api.messages.send, {
@@ -534,13 +584,13 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
           integrations,
           opts.content,
         ).filter((name) => integrations.includes(name));
-        const browserForced =
+        const forcedLocalIntegration =
           selectedIntegrations.length === 1 &&
-          selectedIntegrations[0] === "browser" &&
-          !args.integrations.includes("browser");
-        if (browserForced) {
+          ["browser", "computer"].includes(selectedIntegrations[0] ?? "") &&
+          !args.integrations.includes(selectedIntegrations[0] ?? "");
+        if (forcedLocalIntegration) {
           log(
-            `forcing browser integration for explicit browser request (model requested: ${args.integrations.join(",") || "none"})`,
+            `forcing ${selectedIntegrations[0]} integration for explicit local request (model requested: ${args.integrations.join(",") || "none"})`,
           );
         }
         const res = await spawnExecutionAgent({

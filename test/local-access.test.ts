@@ -97,6 +97,10 @@ describe("local server access", () => {
       isPublicServerRequest(request({ method: "POST", url: "/composio/webhook" })),
     ).toBe(true);
     expect(isPublicServerRequest(request({ method: "POST", url: "/chat" }))).toBe(false);
+    expect(isPublicServerRequest(request({ method: "POST", url: "/computer/pair" }))).toBe(
+      false,
+    );
+    expect(isPublicServerRequest(request({ url: "/computer/status" }))).toBe(false);
     expect(isPublicServerRequest(request({ url: "/runtime-config" }))).toBe(false);
     expect(isPublicServerRequest(request({ url: "/composio/toolkits" }))).toBe(false);
     expect(isPublicServerRequest(request({ method: "GET", url: "/sendblue/webhook" }))).toBe(
