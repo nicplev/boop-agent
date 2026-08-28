@@ -7,6 +7,7 @@ const { pathToFileURL } = require("node:url");
 
 const isMac = process.platform === "darwin";
 const productName = "Lumi Assistant";
+const isHostLaunch = process.argv.includes("--lumi-host");
 const mutableRuntimeItems = [
   ".env",
   ".env.local",
@@ -35,6 +36,7 @@ let boopProcess;
 let bootstrapProcess;
 let webhookCheckTimer;
 let webhookCheckSequence = 0;
+let hostRestartTimer;
 let quitting = false;
 let intentionalStop = false;
 let starting = false;
@@ -72,6 +74,8 @@ function desktopDataRoot() {
 
 app.setName(productName);
 app.setPath("userData", desktopDataRoot());
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) app.quit();
 
 function isInsideMutablePath(relativePath) {
   const normalized = relativePath.split(path.sep).join("/");
@@ -243,6 +247,8 @@ function childEnv() {
     ...process.env,
     BOOP_DESKTOP: "1",
     BOOP_NODE_CMD: nodeShim.cmd,
+    LUMI_DESKTOP_EXECUTABLE: app.isPackaged ? process.execPath : "",
+    LUMI_HOST_MODE: isHostLaunch ? "1" : "0",
     FORCE_COLOR: "0",
     [pathKey]: [nodeShim.dir, binDir, ...macCliPaths, existingPath].filter(Boolean).join(path.delimiter),
   };
@@ -461,7 +467,7 @@ function ensureNativeWindowButtons() {
   mainWindow.setWindowButtonPosition({ x: 18, y: 18 });
 }
 
-function createWindow() {
+function createWindow({ showOnReady = true } = {}) {
   const statusPageUrl = pathToFileURL(path.join(__dirname, "status.html")).href;
   mainWindow = new BrowserWindow({
     width: 1180,
@@ -503,7 +509,7 @@ function createWindow() {
 
   mainWindow.once("ready-to-show", () => {
     ensureNativeWindowButtons();
-    mainWindow.show();
+    if (showOnReady) mainWindow.show();
   });
   mainWindow.on("closed", () => {
     mainWindow = undefined;
@@ -683,6 +689,13 @@ function runBootstrap(command, args) {
 
 async function syncConvexRuntime() {
   const generatedApi = path.join(runtimeRoot, "convex", "_generated", "api.js");
+  if (isHostLaunch && fs.existsSync(generatedApi)) {
+    setStatus({
+      convex: "running",
+      lastMessage: "Using the configured Convex deployment in dedicated host mode.",
+    });
+    return;
+  }
   const convex = localCommand("convex");
   setStatus({
     state: "starting",
@@ -763,6 +776,20 @@ async function startBoop() {
     starting = false;
     boopProcess = undefined;
     if (quitting || intentionalStop || status.state === "stopped") return;
+    if (isHostLaunch) {
+      setStatus({
+        state: "error",
+        server: "stopped",
+        dashboard: "stopped",
+        lastMessage: `Lumi Assistant exited with code ${code}; dedicated host mode will restart it.`,
+      });
+      clearTimeout(hostRestartTimer);
+      hostRestartTimer = setTimeout(() => {
+        hostRestartTimer = undefined;
+        startBoop();
+      }, 10_000);
+      return;
+    }
     if (code === 0 || status.state === "setup-required") {
       resetServiceStatuses(status.state === "setup-required" ? "setup-required" : "stopped");
     } else {
@@ -778,6 +805,8 @@ async function startBoop() {
 }
 
 function stopBoop() {
+  clearTimeout(hostRestartTimer);
+  hostRestartTimer = undefined;
   if (bootstrapProcess) {
     intentionalStop = true;
     bootstrapProcess.kill("SIGTERM");
@@ -835,12 +864,24 @@ ipcMain.handle("boop:open-dashboard", () => {
 });
 ipcMain.handle("boop:show-runtime-folder", () => shell.openPath(runtimeRoot));
 
+if (hasSingleInstanceLock) {
+  app.on("second-instance", () => {
+    if (!mainWindow) createWindow();
+    if (isMac && app.dock) app.dock.show();
+    showMainWindow();
+  });
+}
+
 app.whenReady().then(() => {
+  if (!hasSingleInstanceLock) return;
   runtimeRoot = getRuntimeRoot();
   Object.assign(status, refreshConnectionStatus(), { runtimeRoot });
-  if (isMac && app.dock) app.dock.setIcon(createIcon(256));
+  if (isMac && app.dock) {
+    app.dock.setIcon(createIcon(256));
+    if (isHostLaunch) app.dock.hide();
+  }
 
-  createWindow();
+  if (!isHostLaunch) createWindow();
   startBoop();
 
   app.on("activate", () => {
@@ -851,6 +892,7 @@ app.whenReady().then(() => {
 
 app.on("before-quit", () => {
   quitting = true;
+  clearTimeout(hostRestartTimer);
   stopBoop();
 });
 

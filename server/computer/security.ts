@@ -1,4 +1,5 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { hostname } from "node:os";
 import { api } from "../../convex/_generated/api.js";
 import { convex } from "../convex-client.js";
 
@@ -26,6 +27,18 @@ export interface ComputerSession {
 }
 
 const sessions = new Map<string, ComputerSession>();
+
+export function currentComputerHostId(): string {
+  const configured = process.env.LUMI_HOST_ID?.trim();
+  if (configured && /^[a-zA-Z0-9][a-zA-Z0-9._-]{2,63}$/.test(configured)) {
+    return configured;
+  }
+  return createHash("sha256").update(hostname()).digest("hex").slice(0, 12);
+}
+
+export function currentAlwaysOnHostKey(): string {
+  return `${ALWAYS_ON_HOST_KEY}:${currentComputerHostId()}`;
+}
 
 function workspaceSecret(): string {
   const value = process.env.LUMI_WORKSPACE_SECRET?.trim();
@@ -96,15 +109,19 @@ async function setting(key: string): Promise<string | null> {
 }
 
 export async function getComputerSettings(): Promise<ComputerSettings> {
-  const [enabled, alwaysOnHost, senderHash, senderLabel] = await Promise.all([
+  const [enabled, alwaysOnHost, legacyAlwaysOnHost, senderHash, senderLabel] = await Promise.all([
     setting(ENABLED_KEY),
+    setting(currentAlwaysOnHostKey()),
     setting(ALWAYS_ON_HOST_KEY),
     setting(AUTHORIZED_SENDER_HASH_KEY),
     setting(AUTHORIZED_SENDER_LABEL_KEY),
   ]);
   return {
     enabled: enabled === "true",
-    alwaysOnHost: alwaysOnHost === "true",
+    // Read the old workspace-wide key only until this Mac stores its own
+    // preference. Dedicated hosts must not force every paired Mac to stay awake.
+    alwaysOnHost:
+      alwaysOnHost === "true" || (alwaysOnHost === null && legacyAlwaysOnHost === "true"),
     paired: Boolean(senderHash),
     pairedLabel: senderLabel ?? "",
   };
@@ -112,7 +129,7 @@ export async function getComputerSettings(): Promise<ComputerSettings> {
 
 export async function setComputerAlwaysOnHost(enabled: boolean): Promise<void> {
   await convex.mutation(api.settings.set, {
-    key: ALWAYS_ON_HOST_KEY,
+    key: currentAlwaysOnHostKey(),
     value: enabled ? "true" : "false",
   });
 }

@@ -24,6 +24,11 @@ import {
   macHostPowerStatus,
   syncMacAwakeAssertion,
 } from "./computer/power.js";
+import {
+  installMacHostService,
+  macHostServiceStatus,
+  removeMacHostService,
+} from "./computer/host-service.js";
 
 let lastScreenCaptureProbe: { ok: boolean; checkedAt: number; error?: string } | null = null;
 
@@ -39,16 +44,18 @@ function requireLocalComputerControl(req: Request, res: Response, next: NextFunc
 }
 
 async function statusPayload() {
-  const [settings, mac, power] = await Promise.all([
+  const [settings, mac, power, hostService] = await Promise.all([
     getComputerSettings(),
     macComputerStatus(),
     macHostPowerStatus(),
+    macHostServiceStatus(),
   ]);
   const now = Date.now();
   return {
     ...settings,
     native: nativeComputerDiagnostics(now),
     power,
+    hostService,
     platformSupported: mac.platformSupported,
     accessibilityEnabled: mac.accessibilityEnabled,
     frontmostApp: mac.blockedFrontmostApp ? "Protected app" : mac.frontmostApp,
@@ -158,6 +165,34 @@ export function createComputerRouter(): express.Router {
       res.json({ ok: true, status: await statusPayload() });
     } catch (error) {
       res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  router.post("/host-service/install", async (_req, res) => {
+    try {
+      await installMacHostService();
+      await setComputerAlwaysOnHost(true);
+      await syncMacAwakeAssertion();
+      res.json({ ok: true, status: await statusPayload() });
+    } catch (error) {
+      res.status(500).json({
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        status: await statusPayload().catch(() => undefined),
+      });
+    }
+  });
+
+  router.post("/host-service/remove", async (_req, res) => {
+    try {
+      await removeMacHostService();
+      res.json({ ok: true, status: await statusPayload() });
+    } catch (error) {
+      res.status(500).json({
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        status: await statusPayload().catch(() => undefined),
+      });
     }
   });
 

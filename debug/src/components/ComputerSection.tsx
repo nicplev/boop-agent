@@ -33,6 +33,17 @@ interface ComputerStatus {
     assertionActive: boolean;
     alwaysOnReady: boolean;
   };
+  hostService: {
+    supported: boolean;
+    installed: boolean;
+    loaded: boolean;
+    canInstall: boolean;
+    launchedAsHost: boolean;
+    startsAfterLogin: boolean;
+    restartsAfterCrash: boolean;
+    requiresLoginAfterRestart: boolean;
+    detail: string;
+  };
 }
 
 type Message = { tone: "ok" | "err"; text: string };
@@ -90,6 +101,10 @@ export function ComputerSection({ isDark }: { isDark: boolean }) {
                   : "No native Computer Use task was running."
                 : path === "test-native"
                   ? "The official Computer Use plugin is installed and enabled."
+                  : path === "host-service/install"
+                    ? "Dedicated host startup installed. Lumi will start after login, recover from an unexpected exit, and keep this Mac awake on power."
+                    : path === "host-service/remove"
+                      ? "Dedicated host startup removed. Lumi will no longer open automatically after login."
                   : path === "open-native-settings"
                     ? "Opened ChatGPT settings. Choose Computer Use to review Locked Use and app access."
                     : path === "always-on"
@@ -268,6 +283,61 @@ export function ComputerSection({ isDark }: { isDark: boolean }) {
                 }`}
               />
             </button>
+          </div>
+        )}
+
+        {status?.hostService?.supported && (
+          <div className={subtlePanelClass(isDark, "p-3 space-y-3")}>
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+              <div className="min-w-0">
+                <div className={`text-xs font-medium ${label}`}>Dedicated Mac mini host</div>
+                <div className={`text-[11px] mt-1 leading-relaxed ${muted}`}>
+                  Starts Lumi automatically in the background after macOS login and asks macOS to
+                  restart it after an unexpected exit. This is the recommended setup for the
+                  always-plugged-in Mac mini.
+                </div>
+                <div className={`text-[10px] mono mt-2 ${subtle}`}>
+                  {status.hostService.installed
+                    ? status.hostService.loaded
+                      ? status.hostService.launchedAsHost
+                        ? "active · dedicated host launch"
+                        : "installed · takes over after the next login"
+                      : "installed · loads after the next login"
+                    : status.hostService.canInstall
+                      ? "ready to install"
+                      : "open the installed Applications copy of Lumi first"}
+                </div>
+              </div>
+              <ActionButton
+                isDark={isDark}
+                icon={ComputerSettingsIcon}
+                disabled={
+                  busy !== null ||
+                  (!status.hostService.installed && !status.hostService.canInstall)
+                }
+                onClick={() =>
+                  call(
+                    status.hostService.installed ? "Remove host startup" : "Install host startup",
+                    status.hostService.installed
+                      ? "host-service/remove"
+                      : "host-service/install",
+                  )
+                }
+              >
+                {busy === "Install host startup"
+                  ? "Installing…"
+                  : busy === "Remove host startup"
+                    ? "Removing…"
+                    : status.hostService.installed
+                      ? "Remove auto-start"
+                      : "Install auto-start"}
+              </ActionButton>
+            </div>
+            <div className={`text-[11px] leading-relaxed ${muted}`}>
+              The Mac can stay locked and its display can sleep. After a full reboot, FileVault
+              still requires one normal manual login before Lumi and graphical Computer Use can
+              resume; this setup does not weaken the lock screen or enable automatic login.
+            </div>
           </div>
         )}
 

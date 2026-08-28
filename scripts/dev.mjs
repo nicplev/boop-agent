@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
+const hostMode = process.env.LUMI_HOST_MODE === "1";
 
 // --- preflight: Convex types must exist ----------------------------------
 if (!existsSync(resolve(root, "convex/_generated/api.js"))) {
@@ -294,32 +295,41 @@ ${C.dim}  Sign in at https://dashboard.ngrok.com and add your authtoken with:
   }
 }
 
-console.log(`\nLumi Assistant dev starting on port ${port}. Ctrl-C to stop everything.\n`);
+console.log(
+  `\nLumi Assistant ${hostMode ? "dedicated host" : "dev"} starting on port ${port}. Ctrl-C to stop everything.\n`,
+);
 
 // Background "new-version available?" check. Runs concurrently with the
 // child services; output is prefixed with `upstream │ ` by run() so it
 // won't collide with startup logs. Silent on the happy path. Not added to
 // the `children` array because it exits on its own — we don't want its
 // non-zero exit (which shouldn't happen but hedge anyway) to tear down dev.
-run("upstream", nodeCmd, ["scripts/check-upstream.mjs"]);
+if (!hostMode) run("upstream", nodeCmd, ["scripts/check-upstream.mjs"]);
 
 const tsxBin = localBin("tsx");
 const serverChild = run(
   "server",
   tsxBin.cmd,
-  [...tsxBin.args, "watch", "server/index.ts"],
+  [...tsxBin.args, ...(hostMode ? [] : ["watch"]), "server/index.ts"],
   /listening on :/,
 );
-convexEnvFile = writeConvexDevEnvFile();
-const convexArgs = ["convex", "dev"];
-if (convexEnvFile) convexArgs.push("--env-file", convexEnvFile);
-const convexBin = localBin("convex");
-const convexChild = run(
-  "convex",
-  convexBin.cmd,
-  [...convexBin.args, ...convexArgs.slice(1)],
-  /Convex functions ready/,
-);
+let convexChild = null;
+let convexReady = Promise.resolve();
+if (hostMode) {
+  console.log(`${C.convex}convex${C.reset} │ Convex functions ready (using deployed backend)`);
+} else {
+  convexEnvFile = writeConvexDevEnvFile();
+  const convexArgs = ["convex", "dev"];
+  if (convexEnvFile) convexArgs.push("--env-file", convexEnvFile);
+  const convexBin = localBin("convex");
+  convexChild = run(
+    "convex",
+    convexBin.cmd,
+    [...convexBin.args, ...convexArgs.slice(1)],
+    /Convex functions ready/,
+  );
+  convexReady = convexChild.ready;
+}
 const viteBin = localBin("vite");
 const debugChild = run(
   "debug",
@@ -327,7 +337,7 @@ const debugChild = run(
   [...viteBin.args, "--config", "debug/vite.config.ts"],
   /Local:\s+http/,
 );
-const children = [serverChild, convexChild, debugChild];
+const children = [serverChild, convexChild, debugChild].filter(Boolean);
 
 let ngrokUrlReady = Promise.resolve(null);
 if (cloudflareNamedInstalled) {
@@ -441,7 +451,7 @@ if (useNgrok && ngrokInstalled && ngrokConfigured && !ngrokDomain) {
 
 Promise.all([
   serverChild.ready,
-  convexChild.ready,
+  convexReady,
   debugChild.ready,
   ngrokUrlReady,
 ])
