@@ -13,6 +13,7 @@ import {
   Moon02Icon,
   Sun03Icon,
   Folder01Icon,
+  FolderLibraryIcon,
   CheckmarkBadge01Icon,
 } from "@hugeicons/core-free-icons";
 import { api } from "../../convex/_generated/api.js";
@@ -28,12 +29,14 @@ import { SettingsPanel } from "./components/SettingsPanel.js";
 import { ChangelogDrawer } from "./components/ChangelogDrawer.js";
 import { ProjectsPanel } from "./components/ProjectsPanel.js";
 import { ReviewPanel } from "./components/ReviewPanel.js";
+import { SourcesPanel } from "./components/SourcesPanel.js";
 import { LumiMark } from "./components/LumiMark.js";
 import { RuntimeProviderLogo, type RuntimeProvider } from "./lib/branding.js";
 
 type View =
   | "dashboard"
   | "projects"
+  | "sources"
   | "review"
   | "agents"
   | "automations"
@@ -93,6 +96,7 @@ const DEMO_PHONE_NUMBER = "+11111111111";
 const NAV_ICONS: Record<View, any> = {
   dashboard: DashboardSquare01Icon,
   projects: Folder01Icon,
+  sources: FolderLibraryIcon,
   review: CheckmarkBadge01Icon,
   agents: MachineRobotIcon,
   automations: WorkflowCircle03Icon,
@@ -106,6 +110,7 @@ const NAV_ICONS: Record<View, any> = {
 const NAV: { id: View; label: string }[] = [
   { id: "dashboard", label: "Home" },
   { id: "projects", label: "Projects" },
+  { id: "sources", label: "Sources" },
   { id: "review", label: "Review" },
   { id: "agents", label: "Agents" },
   { id: "automations", label: "Automations" },
@@ -399,6 +404,7 @@ export function App() {
           <div key={view} className="h-full overflow-auto debug-scroll p-5 view-shell">
             {view === "dashboard" && <DashboardPanel isDark={isDark} />}
             {view === "projects" && <ProjectsPanel isDark={isDark} />}
+            {view === "sources" && <SourcesPanel isDark={isDark} />}
             {view === "review" && <ReviewPanel isDark={isDark} />}
             {view === "agents" && <AgentsPanel isDark={isDark} />}
             {view === "automations" && <AutomationsPanel isDark={isDark} />}

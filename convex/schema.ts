@@ -109,6 +109,7 @@ export default defineSchema({
     metadata: v.optional(v.string()),
   })
     .index("by_source_type_and_external_id", ["sourceType", "externalId"])
+    .index("by_content_hash", ["contentHash"])
     .index("by_status_and_imported_at", ["status", "importedAt"])
     .index("by_imported_at", ["importedAt"]),
 

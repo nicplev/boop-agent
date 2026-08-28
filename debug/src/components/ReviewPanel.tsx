@@ -14,32 +14,58 @@ function label(value: string) {
 
 export function ReviewPanel({ isDark }: { isDark: boolean }) {
   const items = useQuery(api.workItems.listForDashboard, { needsReview: true, limit: 200 });
+  const proposals = useQuery(api.proposals.listPending, { limit: 200 });
   const projects = useQuery(api.projects.listForDashboard, { limit: 200 });
   const review = useMutation(api.workItems.review);
+  const decideProposal = useMutation(api.proposals.decide);
   const projectNames = new Map<string, string>(
     (projects ?? []).map(
       (project: any): [string, string] => [String(project._id), project.name],
     ),
   );
   const list = items ?? [];
+  const proposalList = proposals ?? [];
+  const pendingCount = list.length + proposalList.length;
 
   return (
     <PanelPage
       eyebrow="Human in the loop"
       title="Review"
       description="AI-extracted changes stay proposed until you accept or reject them."
-      stat={<HeaderPill isDark={isDark}>{list.length} pending</HeaderPill>}
+      stat={<HeaderPill isDark={isDark}>{pendingCount} pending</HeaderPill>}
     >
-      {items === undefined ? (
+      {items === undefined || proposals === undefined ? (
         <div className="space-y-3">
           {[1, 2, 3].map((item) => <div key={item} className={panelCardClass(isDark, "h-28 shimmer")} />)}
         </div>
-      ) : list.length === 0 ? (
+      ) : pendingCount === 0 ? (
         <EmptyState isDark={isDark}>
           Nothing is waiting for review. Meeting imports will place proposed decisions and commitments here.
         </EmptyState>
       ) : (
         <div className="space-y-3">
+          {proposalList.map((proposal: any) => (
+            <div key={proposal._id} className={panelCardClass(isDark, "border-l-2 border-l-[#F2B705] p-4 fade-in")}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-[#F2B705]/15 px-2 py-1 text-[10px] font-semibold text-[#D49F00]">Evidence proposal</span>
+                    {proposal.confidence !== undefined && (
+                      <span className={`text-[11px] ${mutedTextClass(isDark)}`}>
+                        {Math.round(proposal.confidence * 100)}% confidence
+                      </span>
+                    )}
+                  </div>
+                  <div className={`mt-2 text-sm font-medium ${isDark ? "text-zinc-100" : "text-[#1A1A1A]"}`}>{proposal.title}</div>
+                  <p className={`mt-1 text-xs leading-5 ${mutedTextClass(isDark)}`}>{proposal.summary}</p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button type="button" onClick={() => decideProposal({ proposalId: proposal._id, decision: "reject" })} className={`rounded-xl border px-3 py-1.5 text-xs font-medium ${isDark ? "border-white/10 text-zinc-400 hover:bg-white/5" : "border-[#E5E2DC] text-zinc-600 hover:bg-[#FBFAF6]"}`}>Reject</button>
+                  <button type="button" onClick={() => decideProposal({ proposalId: proposal._id, decision: "accept" })} className="rounded-xl bg-[#51BA65] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#429654]">Accept</button>
+                </div>
+              </div>
+            </div>
+          ))}
           {list.map((item: any) => (
             <div key={item._id} className={panelCardClass(isDark, "p-4 fade-in")}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start">

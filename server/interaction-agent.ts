@@ -8,6 +8,7 @@ import { listEnabledIntegrations } from "./integrations/registry.js";
 import { createAutomationTools } from "./automation-tools.js";
 import { createDraftDecisionTools } from "./draft-tools.js";
 import { createSelfTools } from "./self-tools.js";
+import { createLumiWorkspaceTools } from "./lumi-workspace-tools.js";
 import {
   getRuntimeConfig,
   resolveRuntimeInput,
@@ -40,6 +41,9 @@ Your only tools:
 - spawn_agent (dispatches a sub-agent that CAN touch the world)
 - create_automation / list_automations / toggle_automation / delete_automation
 - list_drafts / send_draft / reject_draft
+- list_projects / create_project / update_project
+- list_work_items / create_work_item / set_work_item_status
+- list_sources / read_source / propose_work_item_from_source
 - get_config / set_runtime / set_model / set_codex_reasoning_effort / set_timezone / list_integrations / search_composio_catalog / inspect_toolkit (self-inspection)
 
 You cannot answer factual questions from your own knowledge. Not allowed.
@@ -149,6 +153,21 @@ When the user signals they want to back out (cancel, scrap it, different
 version, never mind, etc.), call reject_draft.
 
 Never claim something was sent unless send_draft returned success.
+
+Lumi workspace — canonical business state:
+Projects and work items are canonical operational records, unlike conversational
+memory. Before answering about current project status, priorities, decisions,
+commitments, blockers, risks, owners, or next actions, call list_projects and
+list_work_items. Do not answer from memory alone.
+
+Before creating an item, list the relevant project items to avoid duplicates.
+If the user explicitly states or confirms a project, decision, commitment, or
+task, record it with the matching create/update tool. If an item is inferred
+from a meeting, email, document, transcript, source, or agent analysis, create
+it with needsReview=true so it stays proposed in the Review screen. Never turn
+an inference into accepted business state without human confirmation.
+When the inference comes from a captured source, use
+propose_work_item_from_source so the proposal retains its evidence link.
 
 Integration capabilities — IMPORTANT:
 You only know integration NAMES, not their actual tool surface. Composio's
@@ -459,6 +478,7 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
     ...createAutomationTools(opts.conversationId),
     ...createDraftDecisionTools(opts.conversationId, runtimeConfig),
     ...createSelfTools(),
+    ...createLumiWorkspaceTools(),
     defineRuntimeTool(
       "boop-ack",
       "send_ack",
@@ -548,6 +568,15 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
               "mcp__boop-draft-decisions__list_drafts",
               "mcp__boop-draft-decisions__send_draft",
               "mcp__boop-draft-decisions__reject_draft",
+              "mcp__lumi-workspace__list_projects",
+              "mcp__lumi-workspace__create_project",
+              "mcp__lumi-workspace__update_project",
+              "mcp__lumi-workspace__list_work_items",
+              "mcp__lumi-workspace__create_work_item",
+              "mcp__lumi-workspace__set_work_item_status",
+              "mcp__lumi-workspace__list_sources",
+              "mcp__lumi-workspace__read_source",
+              "mcp__lumi-workspace__propose_work_item_from_source",
               "mcp__boop-ack__send_ack",
               "mcp__boop-self__get_config",
               "mcp__boop-self__set_runtime",
