@@ -12,8 +12,8 @@ const EXAMPLE_PATH = resolve(ROOT, ".env.example");
 
 type RuntimeChoice = "claude" | "codex";
 
-const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
-const DEFAULT_CODEX_MODEL = "gpt-5.5";
+const DEFAULT_CLAUDE_MODEL = "claude-sonnet-5";
+const DEFAULT_CODEX_MODEL = "gpt-5.6-sol";
 const DEFAULT_CODEX_REASONING_EFFORT = "medium";
 
 interface CommandSpec {
@@ -22,16 +22,20 @@ interface CommandSpec {
 }
 
 const CLAUDE_MODEL_CHOICES = [
-  { title: "claude-sonnet-4-6 (recommended)", value: "claude-sonnet-4-6" },
-  { title: "claude-opus-4-6 (slowest, most capable)", value: "claude-opus-4-6" },
-  { title: "claude-haiku-4-5 (fastest, cheapest)", value: "claude-haiku-4-5" },
+  { title: "claude-sonnet-5 (recommended)", value: "claude-sonnet-5" },
+  { title: "claude-opus-5 (complex agentic work)", value: "claude-opus-5" },
+  { title: "claude-fable-5 (long-running agents)", value: "claude-fable-5" },
+  {
+    title: "claude-haiku-4-5 (fastest, cheapest)",
+    value: "claude-haiku-4-5-20251001",
+  },
 ];
 
 const CODEX_MODEL_CHOICES = [
-  { title: "gpt-5.5 (most capable)", value: "gpt-5.5" },
-  { title: "gpt-5.4-mini (faster local testing)", value: "gpt-5.4-mini" },
-  { title: "gpt-5.4 (balanced)", value: "gpt-5.4" },
-  { title: "gpt-5.3-codex (coding optimized)", value: "gpt-5.3-codex" },
+  { title: "gpt-5.6-sol (recommended, most capable)", value: "gpt-5.6-sol" },
+  { title: "gpt-5.6-terra (balanced)", value: "gpt-5.6-terra" },
+  { title: "gpt-5.6-luna (fastest, most efficient)", value: "gpt-5.6-luna" },
+  { title: "gpt-5.5 (previous frontier)", value: "gpt-5.5" },
 ];
 
 const CODEX_REASONING_CHOICES = [

@@ -77,7 +77,7 @@ function createIsolatedCodexHome(): string {
   writeFileSync(
     join(codexHome, "config.toml"),
     [
-      'model = "gpt-5.5"',
+      'model = "gpt-5.6-sol"',
       'approval_policy = "never"',
       'sandbox_mode = "read-only"',
       'web_search = "disabled"',

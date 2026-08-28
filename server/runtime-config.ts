@@ -78,39 +78,73 @@ export const RUNTIME_ALIASES: Record<string, RuntimeName> = {
 
 // Backward-compatible names kept for existing imports and prompt text.
 export const MODEL_ALIASES: Record<string, string> = {
-  opus: "claude-opus-4-7",
+  fable: "claude-fable-5",
+  "fable 5": "claude-fable-5",
+  "claude fable 5": "claude-fable-5",
+  opus: "claude-opus-5",
+  "opus 5": "claude-opus-5",
+  "claude opus 5": "claude-opus-5",
+  "opus 4.8": "claude-opus-4-8",
   "opus 4.7": "claude-opus-4-7",
-  sonnet: "claude-sonnet-4-6",
+  sonnet: "claude-sonnet-5",
+  "sonnet 5": "claude-sonnet-5",
+  "claude sonnet 5": "claude-sonnet-5",
   "sonnet 4.6": "claude-sonnet-4-6",
   haiku: "claude-haiku-4-5-20251001",
   "haiku 4.5": "claude-haiku-4-5-20251001",
 };
 
 export const KNOWN_MODELS = new Set<string>([
+  "claude-fable-5",
+  "claude-opus-5",
+  "claude-sonnet-5",
+  "claude-opus-4-8",
   "claude-opus-4-7",
   "claude-sonnet-4-6",
   "claude-haiku-4-5-20251001",
 ]);
 
 export const CODEX_MODEL_ALIASES: Record<string, string> = {
+  "5.6": "gpt-5.6-sol",
+  "gpt 5.6": "gpt-5.6-sol",
+  "gpt-5.6": "gpt-5.6-sol",
+  sol: "gpt-5.6-sol",
+  "5.6 sol": "gpt-5.6-sol",
+  "gpt 5.6 sol": "gpt-5.6-sol",
+  "gpt-5.6-sol": "gpt-5.6-sol",
+  terra: "gpt-5.6-terra",
+  "5.6 terra": "gpt-5.6-terra",
+  "gpt 5.6 terra": "gpt-5.6-terra",
+  "gpt-5.6-terra": "gpt-5.6-terra",
+  luna: "gpt-5.6-luna",
+  "5.6 luna": "gpt-5.6-luna",
+  "gpt 5.6 luna": "gpt-5.6-luna",
+  "gpt-5.6-luna": "gpt-5.6-luna",
   "5.5": "gpt-5.5",
   "gpt 5.5": "gpt-5.5",
   "gpt-5.5": "gpt-5.5",
   "5.4": "gpt-5.4",
   "gpt 5.4": "gpt-5.4",
   "gpt-5.4": "gpt-5.4",
-  mini: "gpt-5.4-mini",
+  mini: "gpt-5.6-luna",
   "5.4 mini": "gpt-5.4-mini",
   "gpt-5.4-mini": "gpt-5.4-mini",
-  codex: "gpt-5.3-codex",
+  codex: "gpt-5.6-sol",
   "5.3 codex": "gpt-5.3-codex",
   "gpt-5.3-codex": "gpt-5.3-codex",
+  spark: "gpt-5.3-codex-spark",
+  "5.3 spark": "gpt-5.3-codex-spark",
+  "gpt-5.3-codex-spark": "gpt-5.3-codex-spark",
 };
 
 export const KNOWN_CODEX_MODELS = new Set<string>([
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
   "gpt-5.5",
   "gpt-5.4",
   "gpt-5.4-mini",
+  "gpt-5.3-codex-spark",
   "gpt-5.3-codex",
   "gpt-5.2",
 ]);
@@ -146,11 +180,11 @@ function resolveRuntimeValue(input: string | null): RuntimeName {
 }
 
 function claudeEnvFallback(): string {
-  return process.env.BOOP_MODEL ?? "claude-sonnet-4-6";
+  return process.env.BOOP_MODEL ?? "claude-sonnet-5";
 }
 
 function codexEnvFallback(): string {
-  return process.env.BOOP_CODEX_MODEL ?? "gpt-5.5";
+  return process.env.BOOP_CODEX_MODEL ?? "gpt-5.6-sol";
 }
 
 function resolveReasoningEffort(input: string | null): RuntimeReasoningEffort {

@@ -76,17 +76,23 @@ const RUNTIME_OPTIONS: Option<RuntimeChoice>[] = [
 ];
 
 const CLAUDE_MODELS: Option[] = [
+  { value: "claude-sonnet-5", label: "Sonnet 5" },
+  { value: "claude-opus-5", label: "Opus 5" },
+  { value: "claude-fable-5", label: "Fable 5" },
+  { value: "claude-opus-4-8", label: "Opus 4.8" },
   { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
   { value: "claude-opus-4-7", label: "Opus 4.7" },
   { value: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
 ];
 
 const CODEX_MODELS: Option[] = [
+  { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+  { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+  { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
   { value: "gpt-5.5", label: "GPT-5.5" },
   { value: "gpt-5.4", label: "GPT-5.4" },
   { value: "gpt-5.4-mini", label: "GPT-5.4 Mini" },
-  { value: "gpt-5.3-codex", label: "GPT-5.3 Agent" },
-  { value: "gpt-5.2", label: "GPT-5.2" },
+  { value: "gpt-5.3-codex-spark", label: "GPT-5.3 Spark" },
 ];
 
 const CODEX_REASONING_EFFORTS: Option<ReasoningEffort>[] = [
