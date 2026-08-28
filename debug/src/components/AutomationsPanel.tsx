@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useMutation, useQuery } from "../lib/localConvex.js";
 import { api } from "../../../convex/_generated/api.js";
 import {
   EmptyState,

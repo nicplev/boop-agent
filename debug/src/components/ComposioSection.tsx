@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { useQuery } from "convex/react";
+import { useQuery } from "../lib/localConvex.js";
 import { api } from "../../../convex/_generated/api.js";
 import { IntegrationLogo } from "../lib/branding.js";
 

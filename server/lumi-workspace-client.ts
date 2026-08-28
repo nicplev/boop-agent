@@ -11,15 +11,6 @@ import type {
   LumiWorkItemStatus,
 } from "./lumi-types.js";
 
-function workspaceSecret(): string {
-  const value = process.env.LUMI_WORKSPACE_SECRET?.trim();
-  if (!value || value.length < 32) {
-    throw new Error(
-      "Lumi workspace security is not configured. Run `npm run lumi:secure`.",
-    );
-  }
-  return value;
-}
 function projectId(value: string): Id<"projects"> {
   return value as Id<"projects">;
 }
@@ -37,12 +28,11 @@ function proposalId(value: string): Id<"proposals"> {
 }
 
 export async function getLumiSnapshot(): Promise<LumiSnapshot> {
-  const secret = workspaceSecret();
   const [projects, workItems, sources, proposals] = await Promise.all([
-    convex.query(api.projects.listForDashboard, { workspaceSecret: secret, limit: 200 }),
-    convex.query(api.workItems.listForDashboard, { workspaceSecret: secret, limit: 500 }),
-    convex.query(api.sources.listForDashboard, { workspaceSecret: secret, limit: 200 }),
-    convex.query(api.proposals.listPending, { workspaceSecret: secret, limit: 200 }),
+    convex.query(api.projects.listForDashboard, { limit: 200 }),
+    convex.query(api.workItems.listForDashboard, { limit: 500 }),
+    convex.query(api.sources.listForDashboard, { limit: 200 }),
+    convex.query(api.proposals.listPending, { limit: 200 }),
   ]);
 
   return {
@@ -104,7 +94,6 @@ export async function listLumiProjects(args: {
   limit?: number;
 }) {
   return await convex.query(api.projects.listForDashboard, {
-    workspaceSecret: workspaceSecret(),
     ...args,
   });
 }
@@ -117,7 +106,6 @@ export async function createLumiProject(args: {
   targetAt?: number;
 }) {
   return await convex.mutation(api.projects.create, {
-    workspaceSecret: workspaceSecret(),
     ...args,
   });
 }
@@ -132,7 +120,6 @@ export async function updateLumiProject(args: {
 }) {
   const { projectId: rawProjectId, ...changes } = args;
   return await convex.mutation(api.projects.update, {
-    workspaceSecret: workspaceSecret(),
     projectId: projectId(rawProjectId),
     ...changes,
   });
@@ -147,7 +134,6 @@ export async function listLumiWorkItems(args: {
 }) {
   const { projectId: rawProjectId, ...filters } = args;
   return await convex.query(api.workItems.listForDashboard, {
-    workspaceSecret: workspaceSecret(),
     ...filters,
     ...(rawProjectId ? { projectId: projectId(rawProjectId) } : {}),
   });
@@ -169,7 +155,6 @@ export async function createLumiWorkItem(args: {
 }) {
   const { projectId: rawProjectId, ...item } = args;
   return await convex.mutation(api.workItems.create, {
-    workspaceSecret: workspaceSecret(),
     ...item,
     ...(rawProjectId ? { projectId: projectId(rawProjectId) } : {}),
   });
@@ -180,7 +165,6 @@ export async function setLumiWorkItemStatus(args: {
   status: LumiWorkItemStatus;
 }) {
   return await convex.mutation(api.workItems.setStatus, {
-    workspaceSecret: workspaceSecret(),
     workItemId: workItemId(args.workItemId),
     status: args.status,
   });
@@ -191,7 +175,6 @@ export async function reviewLumiWorkItem(args: {
   decision: "accept" | "reject";
 }) {
   return await convex.mutation(api.workItems.review, {
-    workspaceSecret: workspaceSecret(),
     workItemId: workItemId(args.workItemId),
     decision: args.decision,
   });
@@ -199,14 +182,12 @@ export async function reviewLumiWorkItem(args: {
 
 export async function listLumiSources(args: { limit?: number }) {
   return await convex.query(api.sources.listForDashboard, {
-    workspaceSecret: workspaceSecret(),
     ...args,
   });
 }
 
 export async function readLumiSource(rawSourceId: string) {
   return await convex.query(api.sources.getWithChunks, {
-    workspaceSecret: workspaceSecret(),
     sourceId: sourceId(rawSourceId),
   });
 }
@@ -219,7 +200,6 @@ export async function createManualLumiSource(args: {
   occurredAt?: number;
 }) {
   return await convex.mutation(api.sources.createManual, {
-    workspaceSecret: workspaceSecret(),
     ...args,
   });
 }
@@ -235,7 +215,6 @@ export async function createWebLumiSource(args: {
   metadata?: string;
 }) {
   return await convex.mutation(api.sources.createWeb, {
-    workspaceSecret: workspaceSecret(),
     ...args,
   });
 }
@@ -253,7 +232,6 @@ export async function proposeLumiWorkItem(args: {
 }) {
   const { sourceId: rawSourceId, projectId: rawProjectId, ...proposal } = args;
   return await convex.mutation(api.proposals.proposeWorkItem, {
-    workspaceSecret: workspaceSecret(),
     sourceId: sourceId(rawSourceId),
     ...(rawProjectId ? { projectId: projectId(rawProjectId) } : {}),
     ...proposal,
@@ -265,7 +243,6 @@ export async function decideLumiProposal(args: {
   decision: "accept" | "reject";
 }) {
   return await convex.mutation(api.proposals.decide, {
-    workspaceSecret: workspaceSecret(),
     proposalId: proposalId(args.proposalId),
     decision: args.decision,
   });

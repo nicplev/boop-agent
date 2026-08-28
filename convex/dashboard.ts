@@ -1,4 +1,4 @@
-import { query } from "./_generated/server";
+import { query } from "./securedFunctions";
 import {
   DEMO_SCAN_LIMIT,
   isDemoAutomationRun,

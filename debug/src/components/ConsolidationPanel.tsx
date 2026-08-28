@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery } from "../lib/localConvex.js";
 import { api } from "../../../convex/_generated/api.js";
 import { useSocket, type SocketEvent } from "../lib/useSocket.js";
 import {

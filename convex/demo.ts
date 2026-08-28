@@ -1,4 +1,5 @@
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { mutation, query } from "./securedFunctions";
 import { v } from "convex/values";
 import { DEMO_PREFIX, DEMO_SCAN_LIMIT, DEMO_SETTING_KEY, isDemoId } from "./demoMode";
 

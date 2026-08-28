@@ -1,8 +1,9 @@
-import { action, mutation, query, type QueryCtx } from "./_generated/server";
+import { internalQuery, type QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
-import { api } from "./_generated/api";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { DEMO_SCAN_LIMIT, isDemoId, isDemoModeEnabled } from "./demoMode";
+import { action, mutation, query } from "./securedFunctions";
 
 const tierV = v.union(v.literal("short"), v.literal("long"), v.literal("permanent"));
 const segmentV = v.union(
@@ -100,7 +101,7 @@ export const upsert = mutation({
   },
 });
 
-export const getByIds = query({
+export const getByIds = internalQuery({
   args: { ids: v.array(v.id("memoryRecords")) },
   handler: async (ctx, args) => {
     const out = [];
@@ -128,7 +129,7 @@ export const vectorSearch = action({
       limit: Math.min(256, limit + 100),
       filter: (q) => q.eq("lifecycle", "active"),
     });
-    const records = await ctx.runQuery(api.memoryRecords.getByIds, {
+    const records = await ctx.runQuery(internal.memoryRecords.getByIds, {
       ids: results.map((r) => r._id),
     });
     const byId = new Map(records.map((record) => [record._id, record]));

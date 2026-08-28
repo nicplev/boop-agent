@@ -21,6 +21,7 @@ import { createAppleRouter } from "./apple-routes.js";
 import { closeLocalBrowser } from "./browser/launcher.js";
 import { createChangelogRouter } from "./changelog.js";
 import { createLumiRouter } from "./lumi-routes.js";
+import { createLegacyDataRouter } from "./legacy-data-routes.js";
 import {
   getRuntimeConfig,
   resolveModelInput,
@@ -149,6 +150,7 @@ async function main() {
   app.use("/apple", createAppleRouter());
   app.use("/changelog", createChangelogRouter());
   app.use("/lumi", createLumiRouter());
+  app.use("/legacy-data", createLegacyDataRouter());
 
   app.post("/agents/:id/cancel", (req, res) => {
     const ok = cancelAgent(req.params.id);

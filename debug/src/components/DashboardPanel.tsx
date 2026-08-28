@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useQuery } from "convex/react";
+import { useQuery } from "../lib/localConvex.js";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Activity01Icon,

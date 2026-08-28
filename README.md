@@ -396,9 +396,9 @@ Everything lives in `.env.local` (auto-created by `npm run setup`). See `.env.ex
 
 | Var | Required | Notes |
 |---|---|---|
-| `VITE_CONVEX_URL` | yes | Convex deployment URL for the Vite debug UI. Written by `npx convex dev`; the server falls back to this value locally. |
+| `VITE_CONVEX_URL` | yes | Convex deployment URL written by `npx convex dev`. The local server uses it as a fallback; the dashboard no longer connects to Convex directly. |
 | `CONVEX_URL` | optional | Server-only Convex URL override for non-Vite deployments. Leave unset locally to avoid Convex CLI ambiguity warnings. |
-| `LUMI_WORKSPACE_SECRET` | yes | Server-only credential protecting Lumi projects, work items, sources, and proposals. `npm run setup` creates and syncs it; use `npm run lumi:secure` to repair or rotate local setup. Never expose it with a `VITE_` prefix. |
+| `LUMI_WORKSPACE_SECRET` | yes | Server-only credential protecting all Convex-backed assistant data, including projects, messages, memory, settings, agents, drafts, usage, and automations. `npm run setup` creates and syncs it; use `npm run lumi:secure` to repair or rotate local setup. Never expose it with a `VITE_` prefix. |
 | `SENDBLUE_API_KEY` / `SENDBLUE_API_SECRET` | yes | From your Sendblue dashboard. |
 | `SENDBLUE_FROM_NUMBER` | yes | Your Sendblue-provisioned number. |
 | `BOOP_RUNTIME` | no | `claude` by default. Set `codex` to use local `codex app-server` with the ChatGPT/Codex account from `codex login`. |

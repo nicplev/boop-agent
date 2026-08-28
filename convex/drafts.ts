@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query } from "./securedFunctions";
 import { v } from "convex/values";
 
 const statusV = v.union(

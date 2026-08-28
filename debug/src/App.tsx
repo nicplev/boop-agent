@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery } from "./lib/localConvex.js";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   MachineRobotIcon,

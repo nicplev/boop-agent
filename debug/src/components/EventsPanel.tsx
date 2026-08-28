@@ -1,4 +1,4 @@
-import { useQuery } from "convex/react";
+import { useQuery } from "../lib/localConvex.js";
 import { api } from "../../../convex/_generated/api.js";
 import {
   EmptyState,
