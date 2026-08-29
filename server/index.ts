@@ -5,7 +5,6 @@ import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
 import { addClient } from "./broadcast.js";
 import { createSendblueRouter } from "./sendblue.js";
-import { handleUserMessage } from "./interaction-agent.js";
 import { loadIntegrations } from "./integrations/registry.js";
 import { startCleanupLoop } from "./memory/clean.js";
 import { startAutomationLoop } from "./automations.js";
@@ -36,6 +35,7 @@ import { startImageCleanup } from "./images/clean.js";
 import { isPublicServerRequest, isTrustedLocalRequest } from "./local-access.js";
 import { startCodebaseSyncLoop } from "./codebase/sync.js";
 import { syncMacAwakeAssertion } from "./computer/power.js";
+import { createChatRouter } from "./chat-routes.js";
 
 async function main() {
   await loadIntegrations();
@@ -159,6 +159,7 @@ async function main() {
   app.use("/changelog", createChangelogRouter());
   app.use("/lumi", createLumiRouter());
   app.use("/legacy-data", createLegacyDataRouter());
+  app.use("/chat", createChatRouter());
 
   app.post("/agents/:id/cancel", (req, res) => {
     const ok = cancelAgent(req.params.id);
@@ -185,26 +186,6 @@ async function main() {
       return;
     }
     res.json(result);
-  });
-
-  // Chat endpoint for local testing and the debug dashboard
-  app.post("/chat", async (req, res) => {
-    const { conversationId, content } = req.body ?? {};
-    if (!conversationId || !content) {
-      res.status(400).json({ error: "conversationId and content required" });
-      return;
-    }
-    try {
-      const reply = await handleUserMessage({
-        conversationId,
-        content,
-        persistAssistantReply: true,
-      });
-      res.json({ reply });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: String(err) });
-    }
   });
 
   const server = createServer(app);

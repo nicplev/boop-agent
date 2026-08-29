@@ -107,11 +107,7 @@ No URLs = no sources section. Never write vague names like "Lonely Planet" or
 output to the user verbatim, so if you don't include URLs, the user won't see
 any.
 
-Style:
-- Optimize for iMessage delivery: short sentences, bullets over paragraphs, no tables.
-- Prefer markdown with **bold** keywords and • bullets.
-- Under 500 words unless explicitly asked for more.
-- If you can't complete something, say why in one sentence.
+{{CHANNEL_STYLE}}
 
 Safety:
 - Anything that sends a message, creates an event, or takes an external action: call save_draft with a JSON payload instead of the real send/create tool. Return the summary so the interaction agent can show it to the user.
@@ -124,6 +120,14 @@ export interface SpawnOptions {
   name?: string;
   runtimeConfig?: RuntimeConfig;
   imageStorageIds?: string[];
+}
+
+export function buildExecutionSystemPrompt(conversationId?: string): string {
+  const desktop = conversationId?.startsWith("desktop:") ?? false;
+  const channelStyle = desktop
+    ? `Style:\n- Write for a native desktop chat with clear Markdown.\n- Use headings, bullets, tables, links, and fenced code when they improve clarity.\n- Be concise by default, but give the task the detail it genuinely needs.\n- If you can't complete something, state why and give the most useful next step.`
+    : `Style:\n- Optimize for iMessage delivery: short sentences, bullets over paragraphs, no tables.\n- Prefer markdown with **bold** keywords and • bullets.\n- Under 500 words unless explicitly asked for more.\n- If you can't complete something, say why in one sentence.`;
+  return EXECUTION_SYSTEM.replace("{{CHANNEL_STYLE}}", channelStyle);
 }
 
 export type SpawnExecutionAgentOpts = SpawnOptions;
@@ -161,7 +165,12 @@ export async function spawnExecutionAgent(opts: SpawnExecutionAgentOpts): Promis
     billingMode: runtimeConfig.billingMode,
     mcpServers: opts.integrations,
   });
-  broadcast("agent_spawned", { agentId, name, task: opts.task });
+  broadcast("agent_spawned", {
+    agentId,
+    name,
+    task: opts.task,
+    conversationId: opts.conversationId,
+  });
 
   await convex.mutation(api.agents.update, { agentId, status: "running" });
 
@@ -199,7 +208,7 @@ export async function spawnExecutionAgent(opts: SpawnExecutionAgentOpts): Promis
     });
     const result = await runAgentRuntime(runtimeConfig, {
       prompt: executionPrompt,
-      systemPrompt: EXECUTION_SYSTEM,
+      systemPrompt: buildExecutionSystemPrompt(opts.conversationId),
       claudeMcpServers: mcpServers,
       tools: runtimeTools,
       allowedTools,
@@ -226,7 +235,12 @@ export async function spawnExecutionAgent(opts: SpawnExecutionAgentOpts): Promis
           ...(accounts.length ? { accounts } : {}),
           content: JSON.stringify(logInput).slice(0, 2000),
         });
-        broadcast("agent_tool", { agentId, toolName, accounts });
+        broadcast("agent_tool", {
+          agentId,
+          toolName,
+          accounts,
+          conversationId: opts.conversationId,
+        });
       },
       onToolResult: async (_toolName, text) => {
         await convex.mutation(api.agents.addLog, {
@@ -283,7 +297,12 @@ export async function spawnExecutionAgent(opts: SpawnExecutionAgentOpts): Promis
       durationMs: Date.now() - agentStart,
     });
   }
-  broadcast("agent_done", { agentId, status, result: buffer.slice(0, 200) });
+  broadcast("agent_done", {
+    agentId,
+    status,
+    result: buffer.slice(0, 200),
+    conversationId: opts.conversationId,
+  });
 
   return { agentId, result: buffer || errorMsg || "(no output)", status };
 }

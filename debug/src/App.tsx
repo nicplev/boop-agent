@@ -15,6 +15,7 @@ import {
   Folder01Icon,
   FolderLibraryIcon,
   CheckmarkBadge01Icon,
+  ChatSparkIcon,
 } from "@hugeicons/core-free-icons";
 import { api } from "../../convex/_generated/api.js";
 import { useSocket } from "./lib/useSocket.js";
@@ -32,9 +33,11 @@ import { ReviewPanel } from "./components/ReviewPanel.js";
 import { SourcesPanel } from "./components/SourcesPanel.js";
 import { LumiMark } from "./components/LumiMark.js";
 import { RuntimeProviderLogo, type RuntimeProvider } from "./lib/branding.js";
+import { ChatPanel } from "./components/ChatPanel.js";
 
 type View =
   | "dashboard"
+  | "chat"
   | "projects"
   | "sources"
   | "review"
@@ -95,6 +98,7 @@ const DEMO_PHONE_NUMBER = "+11111111111";
 
 const NAV_ICONS: Record<View, any> = {
   dashboard: DashboardSquare01Icon,
+  chat: ChatSparkIcon,
   projects: Folder01Icon,
   sources: FolderLibraryIcon,
   review: CheckmarkBadge01Icon,
@@ -109,6 +113,7 @@ const NAV_ICONS: Record<View, any> = {
 
 const NAV: { id: View; label: string }[] = [
   { id: "dashboard", label: "Home" },
+  { id: "chat", label: "Chat" },
   { id: "projects", label: "Projects" },
   { id: "sources", label: "Sources" },
   { id: "review", label: "Review" },
@@ -401,8 +406,23 @@ export function App() {
         </header>
 
         <main className="flex-1 min-h-0 min-w-0 overflow-hidden">
-          <div key={view} className="h-full overflow-auto debug-scroll p-5 view-shell">
+          <div
+            key={view}
+            className={
+              view === "chat"
+                ? "h-full overflow-hidden view-shell chat-view-shell"
+                : "h-full overflow-auto debug-scroll p-5 view-shell"
+            }
+          >
             {view === "dashboard" && <DashboardPanel isDark={isDark} />}
+            {view === "chat" && (
+              <ChatPanel
+                isDark={isDark}
+                runtime={activeRuntime}
+                model={modelLabel}
+                onOpenConnections={() => setView("connections")}
+              />
+            )}
             {view === "projects" && <ProjectsPanel isDark={isDark} />}
             {view === "sources" && <SourcesPanel isDark={isDark} />}
             {view === "review" && <ReviewPanel isDark={isDark} />}

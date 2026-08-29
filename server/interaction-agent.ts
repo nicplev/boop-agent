@@ -32,7 +32,7 @@ You are a DISPATCHER, not a doer. Your job:
 1. Understand what the user wants.
 2. Decide: answer directly (quick facts, chit-chat, anything you already know) OR spawn_agent (real work that needs tools like email, calendar, web, etc.).
 3. When you spawn, give the agent a crisp, specific task — not the raw user message.
-4. When the agent returns, relay the result in YOUR voice, tightened for iMessage.
+4. When the agent returns, relay the result in YOUR voice for the current conversation.
 
 Tone: Warm, practical, concise. Write like a trusted collaborator. Lead with the useful outcome, avoid corporate filler, and use lists only when they improve clarity.
 
@@ -62,17 +62,7 @@ API access. That lack of access is the signal to call send_ack, then
 spawn_agent. Refusing or suggesting the user use another tool is a failure
 unless the spawned agent already tried and could not complete the task.
 
-Acknowledgment rule (iMessage UX):
-BEFORE every spawn_agent call, you MUST call send_ack first with a short
-1-sentence message. The user otherwise sees nothing for 10-30 seconds while
-the sub-agent works. Examples of good acks:
-  "On it — one sec 🔍"
-  "Looking into your calendar…"
-  "Drafting that email now."
-  "Checking Slack, hold tight."
-Order: send_ack → spawn_agent → (wait) → final reply with the result.
-Skip the ack ONLY for things you'll answer in under 2 seconds (chit-chat,
-simple memory recall, single automation toggle).
+{{ACKNOWLEDGMENT_RULE}}
 
 Memory — recall is MANDATORY before any claim about the user:
 Your context does NOT auto-load saved memories. You must call recall()
@@ -113,7 +103,7 @@ When relaying a sub-agent's answer:
   add, remove, paraphrase, or summarize URLs.
 - If the sub-agent did NOT include a Sources section, YOU DO NOT ADD ONE.
   Do not write "Sources: Lonely Planet, etc." No exceptions.
-- You may tighten the body for iMessage (shorter bullets, fewer emojis),
+- You may tighten the body for the current conversation,
   but the URLs are ground truth — don't touch them.
 
 Phone-number privacy:
@@ -228,7 +218,8 @@ the relevant Apple app.
 Lumi codebase and assets (local, read-only):
 When "lumi-codebase" is available and the user asks about the Lumi product,
 implementation, architecture, UI, bugs, repository history, commits, pull
-requests, or brand/design assets, call send_ack and then spawn_agent with
+requests, or brand/design assets, acknowledge when the current channel supports
+it and then spawn_agent with
 integrations ["lumi-codebase"]. Repository memory is only a freshness cue;
 the spawned agent must use the live repository tools for factual code claims.
 If the request also needs another connected service, include both integration
@@ -282,7 +273,7 @@ Business context:
 - Never claim a project fact without recalling it or retrieving supporting evidence through a spawned agent.
 - External actions always require the draft-and-approval flow.
 
-Format: Plain iMessage-friendly text. Markdown sparingly. Keep replies under ~400 chars when you can.`;
+{{CHANNEL_FORMAT}}`;
 
 interface HandleOpts {
   conversationId: string;
@@ -299,6 +290,30 @@ interface HandleOpts {
   persistAssistantReply?: boolean;
   images?: Array<{ storageId: string; mediaType: string }>;
   mediaError?: string;
+}
+
+function isDesktopConversation(conversationId: string): boolean {
+  return conversationId.startsWith("desktop:");
+}
+
+export function buildInteractionSystemPrompt(
+  conversationId: string,
+  integrations: string[],
+): string {
+  const desktop = isDesktopConversation(conversationId);
+  const acknowledgmentRule = desktop
+    ? `Desktop chat feedback:\nThe desktop interface already shows live working status. Do NOT call send_ack\nfor desktop conversations. Go directly to spawn_agent when tools are needed,\nthen return one complete final answer.`
+    : `Acknowledgment rule (iMessage UX):\nBEFORE every spawn_agent call, you MUST call send_ack first with a short\n1-sentence message. The user otherwise sees nothing for 10-30 seconds while\nthe sub-agent works. Examples of good acks:\n  "On it — one sec 🔍"\n  "Looking into your calendar…"\n  "Drafting that email now."\n  "Checking Slack, hold tight."\nOrder: send_ack → spawn_agent → (wait) → final reply with the result.\nSkip the ack ONLY for things you'll answer in under 2 seconds (chit-chat,\nsimple memory recall, single automation toggle).`;
+  const channelFormat = desktop
+    ? `Format: Native desktop chat. Use clear Markdown, headings, bullets, links,\nand fenced code blocks whenever they improve the answer. Give the request the\ndetail it needs; do not apply SMS length limits.`
+    : `Format: Plain iMessage-friendly text. Markdown sparingly. Keep replies under ~400 chars when you can.`;
+
+  return INTERACTION_SYSTEM.replace("{{ACKNOWLEDGMENT_RULE}}", acknowledgmentRule)
+    .replace("{{CHANNEL_FORMAT}}", channelFormat)
+    .replace(
+      "{{INTEGRATIONS}}",
+      integrations.join(", ") || "(no integrations configured yet)",
+    );
 }
 
 function randomId(prefix: string): string {
@@ -416,10 +431,8 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
     .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
     .join("\n");
 
-  const systemPrompt = INTERACTION_SYSTEM.replace(
-    "{{INTEGRATIONS}}",
-    integrations.join(", ") || "(no integrations configured yet)",
-  );
+  const desktopConversation = isDesktopConversation(opts.conversationId);
+  const systemPrompt = buildInteractionSystemPrompt(opts.conversationId, integrations);
 
   const userText = opts.mediaError
     ? `[user sent images but they couldn't be downloaded: ${opts.mediaError}]\n${opts.content}`
@@ -534,26 +547,32 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
   }
   const spawnableImageStorageIds = promptBuild.imageStorageIds;
 
+  const acknowledgementTools = desktopConversation
+    ? []
+    : [
+        defineRuntimeTool(
+          "boop-ack",
+          "send_ack",
+          `Send a short acknowledgment message to the user IMMEDIATELY, before a slow operation. Use this BEFORE spawn_agent so the user knows you heard them and are working on it. Keep it to ONE short sentence (ideally under 60 chars) with tone that matches the task. Examples: "On it — one sec 🔍", "Looking into it…", "Drafting now, hold tight.", "Let me check your calendar."`,
+          {
+            message: z.string().describe("1 short sentence ack. No markdown. Emojis OK."),
+          },
+          async (args) => {
+            const text = args.message.trim();
+            if (!text) return runtimeText("Empty ack skipped.");
+            await sendAck(text);
+            return runtimeText("Ack sent to user.");
+          },
+        ),
+      ];
+
   const tools = [
     ...createMemoryTools(opts.conversationId),
     ...createAutomationTools(opts.conversationId),
     ...createDraftDecisionTools(opts.conversationId, runtimeConfig),
     ...createSelfTools(),
     ...createLumiWorkspaceTools(),
-    defineRuntimeTool(
-      "boop-ack",
-      "send_ack",
-      `Send a short acknowledgment message to the user IMMEDIATELY, before a slow operation. Use this BEFORE spawn_agent so the user knows you heard them and are working on it. Keep it to ONE short sentence (ideally under 60 chars) with tone that matches the task. Examples: "On it — one sec 🔍", "Looking into it…", "Drafting now, hold tight.", "Let me check your calendar."`,
-      {
-        message: z.string().describe("1 short sentence ack. No markdown. Emojis OK."),
-      },
-      async (args) => {
-        const text = args.message.trim();
-        if (!text) return runtimeText("Empty ack skipped.");
-        await sendAck(text);
-        return runtimeText("Ack sent to user.");
-      },
-    ),
+    ...acknowledgementTools,
     defineRuntimeTool(
       "boop-spawn",
       "spawn_agent",
@@ -638,7 +657,7 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
               "mcp__lumi-workspace__list_sources",
               "mcp__lumi-workspace__read_source",
               "mcp__lumi-workspace__propose_work_item_from_source",
-              "mcp__boop-ack__send_ack",
+              ...(desktopConversation ? [] : ["mcp__boop-ack__send_ack"]),
               "mcp__boop-self__get_config",
               "mcp__boop-self__set_runtime",
               "mcp__boop-self__set_model",
